@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from drf_spectacular.views import (
     SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView,
 )
-from accounts.views import RegisterView, LoginView, MeView, ProfileViewSet
+from accounts.views import RegisterView, LoginView, MeView, ProfileViewSet, StreakView, SkillSuggestView
 from posts.views import PostViewSet, StoryViewSet
 from messaging.views import ConversationViewSet
 from notifications.views import NotificationViewSet
@@ -37,6 +37,8 @@ urlpatterns = [
     path("api/auth/login/", LoginView.as_view(), name="login"),
     path("api/auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/me/", MeView.as_view(), name="me"),
+    path("api/streak/", StreakView.as_view(), name="streak"),
+    path("api/skills/suggest/", SkillSuggestView.as_view(), name="skill-suggest"),
     # API
     path("api/", include(router.urls)),
     # Swagger

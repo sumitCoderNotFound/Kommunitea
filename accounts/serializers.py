@@ -33,15 +33,20 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            "id", "full_name", "email", "avatar_url", "university", "course",
-            "graduation_date", "intake_year", "city", "status", "skills",
+            "id", "full_name", "email", "avatar_url", "user_type",
+            "university", "course", "study_level", "graduation_date", "intake_year",
+            "student_email", "company", "job_title", "years_experience", "industry",
+            "hiring_for", "display_company", "open_to_networking", "open_to_referrals",
+            "city", "status", "skills",
             "interests", "looking_for", "career_goals", "bio", "linkedin",
             "github", "portfolio", "is_verified", "badge", "is_onboarded",
             "followers_count", "following_count", "is_private",
             "is_following", "has_requested",
+            "streak_count", "longest_streak",
         ]
         read_only_fields = ["id", "email", "is_verified", "badge",
-                            "followers_count", "following_count"]
+                            "followers_count", "following_count",
+                            "streak_count", "longest_streak"]
 
     def get_is_following(self, obj):
         request = self.context.get("request")

@@ -151,10 +151,18 @@ CORS_ALLOWED_ORIGINS = config(
 )
 CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=DEBUG, cast=bool)
 
+# Allow all Vercel preview/production URLs for the frontend via regex, so the
+# changing preview domains (e.g. kommunitea-fronted-xxxx.vercel.app) all work.
+CORS_ALLOWED_ORIGIN_REGEXES = config(
+    "CORS_ALLOWED_ORIGIN_REGEXES",
+    default=r"^https://.*\.vercel\.app$",
+    cast=Csv(),
+)
+
 # CSRF trusted origins — needed for the Django admin over HTTPS on Railway/your domain
 CSRF_TRUSTED_ORIGINS = config(
     "CSRF_TRUSTED_ORIGINS",
-    default="https://*.railway.app,https://*.up.railway.app",
+    default="https://*.railway.app,https://*.up.railway.app,https://*.vercel.app",
     cast=Csv(),
 )
 

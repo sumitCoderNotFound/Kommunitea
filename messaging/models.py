@@ -16,14 +16,27 @@ class Conversation(models.Model):
 
     @classmethod
     def between(cls, user_a, user_b):
-        """Get or create the 1-on-1 conversation between two users."""
-        convo = (cls.objects.filter(participants=user_a)
-                            .filter(participants=user_b).first())
-        if convo:
+        """Get or create the 1-on-1 conversation between two users.
+        Race-safe: always returns the oldest existing conversation, and
+        cleans up any duplicate empty conversations created by a race."""
+        from django.db import transaction
+
+        with transaction.atomic():
+            existing = list(
+                cls.objects.filter(participants=user_a)
+                           .filter(participants=user_b)
+                           .order_by("id")
+            )
+            if existing:
+                keeper = existing[0]
+                # Remove duplicate empty conversations from past races
+                for dup in existing[1:]:
+                    if not dup.messages.exists():
+                        dup.delete()
+                return keeper
+            convo = cls.objects.create()
+            convo.participants.add(user_a, user_b)
             return convo
-        convo = cls.objects.create()
-        convo.participants.add(user_a, user_b)
-        return convo
 
     def __str__(self):
         return f"Conversation #{self.id}"

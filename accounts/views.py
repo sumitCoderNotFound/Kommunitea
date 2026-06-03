@@ -118,3 +118,67 @@ class ProfileViewSet(mixins.RetrieveModelMixin,
     def reject_request(self, request, pk=None):
         FollowRequest.objects.filter(from_user_id=pk, to_user=request.user).delete()
         return Response({"detail": "Rejected."})
+
+
+# ---- Streak (per-user, permanent) ----
+from rest_framework.views import APIView
+
+
+class StreakView(APIView):
+    """GET returns current streak; POST records today's visit and returns updated streak."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        u = request.user
+        return Response({
+            "current_streak": u.streak_count,
+            "longest_streak": u.longest_streak,
+            "last_visit": u.last_visit,
+        })
+
+    def post(self, request):
+        u = request.user
+        u.record_visit()
+        return Response({
+            "current_streak": u.streak_count,
+            "longest_streak": u.longest_streak,
+            "last_visit": u.last_visit,
+        })
+
+
+# ---- Skills suggestions via ESCO (with curated fallback) ----
+import json as _json
+from urllib.request import urlopen, Request as _Req
+from urllib.parse import urlencode as _enc
+
+_FALLBACK_SKILLS = [
+    "Python", "JavaScript", "TypeScript", "React", "Node.js", "Django", "SQL",
+    "Java", "C++", "Data Analysis", "Machine Learning", "Excel", "Communication",
+    "Project Management", "Leadership", "Teamwork", "Problem Solving", "Marketing",
+    "Figma", "UI Design", "Public Speaking", "Writing", "Git", "AWS", "Docker",
+]
+
+
+class SkillSuggestView(APIView):
+    """GET /api/skills/suggest/?q=python -> {results: [..]} from ESCO, fallback to curated."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        q = (request.query_params.get("q") or "").strip()
+        if not q:
+            return Response({"results": _FALLBACK_SKILLS[:12]})
+        try:
+            params = _enc({"text": q, "language": "en", "type": "skill", "limit": 8})
+            url = f"https://ec.europa.eu/esco/api/suggest2?{params}"
+            req = _Req(url, headers={"Accept": "application/json", "User-Agent": "Kommunitea"})
+            with urlopen(req, timeout=4) as resp:
+                data = _json.loads(resp.read().decode("utf-8"))
+            results = [r.get("title") for r in data.get("_embedded", {}).get("results", []) if r.get("title")]
+            if results:
+                return Response({"results": results})
+        except Exception:
+            pass
+        # fallback: filter curated list by query
+        ql = q.lower()
+        matches = [s for s in _FALLBACK_SKILLS if ql in s.lower()]
+        return Response({"results": matches or _FALLBACK_SKILLS[:12]})
