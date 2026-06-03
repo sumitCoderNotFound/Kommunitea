@@ -182,3 +182,29 @@ class SkillSuggestView(APIView):
         ql = q.lower()
         matches = [s for s in _FALLBACK_SKILLS if ql in s.lower()]
         return Response({"results": matches or _FALLBACK_SKILLS[:12]})
+
+
+# ---- GDPR: export my data + delete my account ----
+class MyDataExportView(APIView):
+    """GET /api/auth/my-data/ -> a JSON bundle of everything we hold on the user."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        u = request.user
+        data = {
+            "account": UserSerializer(u, context={"request": request}).data,
+            "posts": list(u.posts.values("id", "body", "category", "created_at")) if hasattr(u, "posts") else [],
+            "exported_at": __import__("django").utils.timezone.now().isoformat(),
+            "note": "This is a copy of the personal data Kommunitea holds about you.",
+        }
+        return Response(data)
+
+
+class DeleteAccountView(APIView):
+    """DELETE /api/auth/delete-account/ -> permanently delete the user and their data."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request):
+        u = request.user
+        u.delete()  # cascades to posts/messages/etc. via FK on_delete
+        return Response({"detail": "Your account and data have been deleted."}, status=status.HTTP_200_OK)
