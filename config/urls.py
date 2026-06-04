@@ -16,6 +16,7 @@ from moderation.views import ReportViewSet, BlockViewSet
 from community.views import MemberViewSet
 from jobs.views import JobViewSet
 from team.views import TeamMemberViewSet
+from scheduler.views import TaskViewSet, WeeklyGoalViewSet, OpportunityListView, SchedulerOverviewView
 
 router = DefaultRouter()
 router.register(r"posts", PostViewSet, basename="post")
@@ -28,6 +29,8 @@ router.register(r"profiles", ProfileViewSet, basename="profile")
 router.register(r"members", MemberViewSet, basename="member")
 router.register(r"jobs", JobViewSet, basename="job")
 router.register(r"team", TeamMemberViewSet, basename="team")
+router.register(r"scheduler/tasks", TaskViewSet, basename="task")
+router.register(r"scheduler/goals", WeeklyGoalViewSet, basename="weeklygoal")
 
 urlpatterns = [
     path("api/ai/", include("ai.urls")),
@@ -38,6 +41,8 @@ urlpatterns = [
     path("api/auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/me/", MeView.as_view(), name="me"),
     path("api/streak/", StreakView.as_view(), name="streak"),
+    path("api/scheduler/opportunities/", OpportunityListView.as_view(), name="opportunities"),
+    path("api/scheduler/overview/", SchedulerOverviewView.as_view(), name="scheduler-overview"),
     path("api/auth/my-data/", MyDataExportView.as_view(), name="my-data"),
     path("api/auth/delete-account/", DeleteAccountView.as_view(), name="delete-account"),
     path("api/skills/suggest/", SkillSuggestView.as_view(), name="skill-suggest"),

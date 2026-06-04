@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     "community",
     "jobs",
     "team",
+    "scheduler",
 ]
 
 MIDDLEWARE = [
@@ -106,11 +107,37 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-# WhiteNoise: serve compressed static files directly from Django (no nginx needed)
-STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
-}
+
+# --- Media storage ---
+# Uses AWS S3 in production (when keys are set), local filesystem otherwise.
+# This means uploads (avatars, post images, stories) persist permanently on S3
+# instead of being wiped on each Railway redeploy.
+AWS_STORAGE_BUCKET_NAME = config("AWS_STORAGE_BUCKET_NAME", default="")
+AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID", default="")
+AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY", default="")
+AWS_S3_REGION_NAME = config("AWS_S3_REGION_NAME", default="eu-north-1")
+
+USE_S3 = bool(AWS_STORAGE_BUCKET_NAME and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
+
+if USE_S3:
+    AWS_S3_CUSTOM_DOMAIN = f"{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com"
+    AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
+    AWS_DEFAULT_ACL = None          # bucket policy handles public read
+    AWS_QUERYSTRING_AUTH = False     # clean public URLs, no signed query strings
+    AWS_S3_FILE_OVERWRITE = False    # don't clobber files with the same name
+    MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/"
+    STORAGES = {
+        "default": {"BACKEND": "storages.backends.s3.S3Storage"},
+        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+    }
+else:
+    MEDIA_URL = "/media/"
+    MEDIA_ROOT = BASE_DIR / "media"
+    # WhiteNoise: serve compressed static files directly from Django (no nginx needed)
+    STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+    }
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
@@ -168,10 +195,6 @@ CSRF_TRUSTED_ORIGINS = config(
 
 # Custom user model
 AUTH_USER_MODEL = "accounts.User"
-
-# Media (uploaded images)
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
 
 # JWT
 from datetime import timedelta  # noqa: E402
