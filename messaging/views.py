@@ -1,11 +1,12 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema
-from .models import Conversation, Message
+from .models import Conversation, Message, MessageReaction
 from .serializers import ConversationSerializer, MessageSerializer
 from notifications.models import Notification
 
@@ -90,35 +91,100 @@ class ConversationViewSet(viewsets.ModelViewSet):
         convo.save()
         return Response({"detail": "Accepted."})
 
-    @action(detail=True, methods=["get", "post"])
+    @action(detail=True, methods=["get", "post"],
+            parser_classes=[MultiPartParser, FormParser, JSONParser])
     def messages(self, request, pk=None):
         convo = self.get_object()
         _touch_presence(request.user)
         if request.method == "POST":
-            body = request.data.get("body", "").strip()
-            if not body:
+            kind = request.data.get("kind", "text")
+            body = (request.data.get("body") or "").strip()
+            gif_url = (request.data.get("gifUrl") or request.data.get("gif_url") or "").strip()
+            view_once = str(request.data.get("viewOnce") or request.data.get("view_once") or "").lower() in ("1", "true", "yes")
+            image = request.FILES.get("image")
+            doc = request.FILES.get("file")
+            lat = request.data.get("lat")
+            lng = request.data.get("lng")
+
+            if kind not in dict(Message.Kind.choices):
+                kind = "text"
+            if view_once and image:
+                kind = Message.Kind.VIEW_ONCE
+            if gif_url and kind == "text":
+                kind = Message.Kind.GIF
+            if doc and kind == "text":
+                kind = Message.Kind.DOCUMENT
+            if (lat not in (None, "")) and (lng not in (None, "")) and kind == "text":
+                kind = Message.Kind.LOCATION
+
+            has_location = (lat not in (None, "")) and (lng not in (None, ""))
+            if not body and not image and not gif_url and not doc and not has_location:
                 return Response({"detail": "Empty message."}, status=status.HTTP_400_BAD_REQUEST)
-            msg = Message.objects.create(conversation=convo, sender=request.user, body=body)
+
+            msg = Message.objects.create(
+                conversation=convo, sender=request.user, body=body, kind=kind,
+                image=image if image else None, file=doc if doc else None,
+                file_name=(getattr(doc, "name", "") or "")[:200] if doc else "",
+                gif_url=gif_url,
+                lat=float(lat) if has_location else None, lng=float(lng) if has_location else None,
+            )
             convo.save()  # bump updated_at
 
             if convo.kind == Conversation.Kind.AI:
-                # generate an assistant reply inline
                 from ai.services import career_assistant_reply
                 history = [{"body": m.body, "is_ai": m.is_ai} for m in convo.messages.all()]
-                profile = {
-                    "full_name": request.user.full_name, "course": request.user.course,
-                    "university": request.user.university, "skills": request.user.skills,
-                }
+                profile = {"full_name": request.user.full_name, "course": request.user.course,
+                           "university": request.user.university, "skills": request.user.skills}
                 reply_text = career_assistant_reply(body, history=history, profile=profile)
                 Message.objects.create(conversation=convo, sender=None, is_ai=True, body=reply_text)
                 convo.save()
             else:
-                # notify other participants (skip self)
+                preview = body[:60] if body else {
+                    "gif": "GIF", "image": "Photo", "view_once": "Photo", "doodle": "Doodle",
+                    "document": "Document", "location": "Location",
+                }.get(kind, "Message")
                 for other in convo.participants.exclude(pk=request.user.pk):
-                    Notification.push(other, request.user, Notification.Verb.MESSAGE, text=body[:60])
+                    Notification.push(other, request.user, Notification.Verb.MESSAGE, text=preview)
             return Response(MessageSerializer(msg, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
         # GET: mark incoming as read, return all
         convo.messages.filter(is_read=False).exclude(sender=request.user).update(is_read=True)
-        data = MessageSerializer(convo.messages.all(), many=True, context={"request": request}).data
+        data = MessageSerializer(convo.messages.prefetch_related("reactions").all(), many=True, context={"request": request}).data
         return Response(data)
+
+    @action(detail=True, methods=["post"], url_path=r"messages/(?P<message_id>[^/.]+)/open")
+    def open_view_once(self, request, pk=None, message_id=None):
+        """Recipient opens a view-once photo. Returns the image URL once, then expires it."""
+        convo = self.get_object()
+        msg = convo.messages.filter(pk=message_id, kind=Message.Kind.VIEW_ONCE).first()
+        if not msg:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        if msg.sender_id == request.user.pk:
+            # sender can't consume their own; just report state
+            return Response({"viewed": msg.viewed_at is not None, "imageUrl": ""})
+        if msg.viewed_at is not None:
+            return Response({"viewed": True, "imageUrl": "", "detail": "Already viewed."})
+        url = request.build_absolute_uri(msg.image.url) if msg.image else ""
+        msg.viewed_at = timezone.now()
+        msg.save(update_fields=["viewed_at"])
+        if msg.sender_id:
+            Notification.push(msg.sender, request.user, Notification.Verb.VIEW_ONCE_OPENED, text="opened your photo")
+        return Response({"viewed": True, "imageUrl": url})
+
+    @action(detail=True, methods=["post"], url_path=r"messages/(?P<message_id>[^/.]+)/react")
+    def react(self, request, pk=None, message_id=None):
+        """Toggle/replace the current user's emoji reaction on a message. Empty emoji removes it."""
+        convo = self.get_object()
+        msg = convo.messages.filter(pk=message_id).first()
+        if not msg:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        emoji = (request.data.get("emoji") or "").strip()
+        existing = MessageReaction.objects.filter(message=msg, user=request.user).first()
+        if not emoji or (existing and existing.emoji == emoji):
+            if existing:
+                existing.delete()
+        else:
+            MessageReaction.objects.update_or_create(message=msg, user=request.user, defaults={"emoji": emoji})
+            if msg.sender_id and msg.sender_id != request.user.pk:
+                Notification.push(msg.sender, request.user, Notification.Verb.MESSAGE_REACTION, text=emoji)
+        return Response(MessageSerializer(msg, context={"request": request}).data)

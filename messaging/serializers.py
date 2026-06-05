@@ -5,11 +5,48 @@ from posts.serializers import AuthorSerializer
 
 class MessageSerializer(serializers.ModelSerializer):
     sender = AuthorSerializer(read_only=True)
+    image_url = serializers.SerializerMethodField()
+    file_url = serializers.SerializerMethodField()
+    viewed = serializers.SerializerMethodField()
+    reactions = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = ["id", "sender", "body", "is_ai", "is_read", "created_at"]
-        read_only_fields = ["id", "sender", "is_ai", "is_read", "created_at"]
+        fields = ["id", "sender", "body", "kind", "image_url", "file_url", "file_name", "gif_url",
+                  "lat", "lng", "viewed", "reactions", "is_ai", "is_read", "created_at"]
+        read_only_fields = ["id", "sender", "kind", "image_url", "file_url", "gif_url", "viewed",
+                            "reactions", "is_ai", "is_read", "created_at"]
+
+    def _me(self):
+        req = self.context.get("request")
+        return req.user if req else None
+
+    def get_image_url(self, obj):
+        if obj.kind == Message.Kind.VIEW_ONCE and obj.viewed_at is not None:
+            return ""
+        if obj.image:
+            req = self.context.get("request")
+            return req.build_absolute_uri(obj.image.url) if req else obj.image.url
+        return ""
+
+    def get_file_url(self, obj):
+        if obj.file:
+            req = self.context.get("request")
+            return req.build_absolute_uri(obj.file.url) if req else obj.file.url
+        return ""
+
+    def get_viewed(self, obj):
+        return obj.kind == Message.Kind.VIEW_ONCE and obj.viewed_at is not None
+
+    def get_reactions(self, obj):
+        me = self._me()
+        out = {}
+        for r in obj.reactions.all():
+            entry = out.setdefault(r.emoji, {"emoji": r.emoji, "count": 0, "mine": False})
+            entry["count"] += 1
+            if me and r.user_id == me.pk:
+                entry["mine"] = True
+        return list(out.values())
 
 
 class ConversationSerializer(serializers.ModelSerializer):

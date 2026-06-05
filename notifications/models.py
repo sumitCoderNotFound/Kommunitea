@@ -15,6 +15,8 @@ class Notification(models.Model):
         STORY_REPLY = "story_reply", "replied to your story"
         STORY_SHARE = "story_share", "shared your story"
         STREAK = "streak", "reached a streak milestone"
+        MESSAGE_REACTION = "message_reaction", "reacted to your message"
+        VIEW_ONCE_OPENED = "view_once_opened", "opened your photo"
 
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
