@@ -53,6 +53,7 @@ class User(AbstractUser):
 
     full_name = models.CharField(max_length=120)
     avatar = models.ImageField(upload_to="avatars/", blank=True, null=True)
+    cover_image = models.ImageField(upload_to="covers/", blank=True, null=True)
     user_type = models.CharField(max_length=20, choices=UserType.choices, default=UserType.STUDENT)
     # Education (students/graduates)
     university = models.CharField(max_length=160, blank=True)

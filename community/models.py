@@ -41,3 +41,47 @@ class Member(models.Model):
 
     def __str__(self):
         return f"{self.full_name} ({self.city})"
+
+
+class Community(models.Model):
+    """A joinable community (university, tech, startups, housing, events, etc.)."""
+    from django.conf import settings as _settings
+
+    class Category(models.TextChoices):
+        UNIVERSITY = "university", "Universities"
+        TECHNOLOGY = "technology", "Technology"
+        STARTUPS = "startups", "Startups"
+        JOBS = "jobs", "Jobs"
+        HOUSING = "housing", "Housing"
+        EVENTS = "events", "Events"
+        OTHER = "other", "Other"
+
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    category = models.CharField(max_length=20, choices=Category.choices, default=Category.OTHER)
+    image = models.ImageField(upload_to="communities/", blank=True, null=True)
+    members = models.ManyToManyField("accounts.User", related_name="communities", blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class Project(models.Model):
+    """A showcase project a user adds to their profile."""
+    owner = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="projects")
+    title = models.CharField(max_length=140)
+    description = models.TextField(blank=True)
+    url = models.URLField(blank=True)
+    image = models.ImageField(upload_to="projects/", blank=True, null=True)
+    tags = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.title

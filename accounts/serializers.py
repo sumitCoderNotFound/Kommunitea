@@ -25,6 +25,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     """Full profile representation used by /auth/me and /profiles."""
     avatar_url = serializers.SerializerMethodField()
+    cover_image_url = serializers.SerializerMethodField()
     followers_count = serializers.IntegerField(read_only=True)
     following_count = serializers.IntegerField(read_only=True)
     is_following = serializers.SerializerMethodField()
@@ -33,7 +34,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            "id", "full_name", "email", "avatar_url", "user_type",
+            "id", "full_name", "email", "avatar_url", "cover_image_url", "user_type",
             "university", "course", "study_level", "graduation_date", "intake_year",
             "student_email", "company", "job_title", "years_experience", "industry",
             "hiring_for", "display_company", "open_to_networking", "open_to_referrals",
@@ -65,6 +66,13 @@ class UserSerializer(serializers.ModelSerializer):
             return ""
         request = self.context.get("request")
         url = obj.avatar.url
+        return request.build_absolute_uri(url) if request else url
+
+    def get_cover_image_url(self, obj):
+        if not obj.cover_image:
+            return ""
+        request = self.context.get("request")
+        url = obj.cover_image.url
         return request.build_absolute_uri(url) if request else url
 
 

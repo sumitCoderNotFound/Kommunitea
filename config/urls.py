@@ -13,7 +13,7 @@ from posts.views import PostViewSet, StoryViewSet
 from messaging.views import ConversationViewSet
 from notifications.views import NotificationViewSet
 from moderation.views import ReportViewSet, BlockViewSet
-from community.views import MemberViewSet
+from community.views import MemberViewSet, CommunityViewSet, ProjectViewSet
 from jobs.views import JobViewSet
 from team.views import TeamMemberViewSet
 from scheduler.views import TaskViewSet, WeeklyGoalViewSet, OpportunityListView, SchedulerOverviewView
@@ -27,6 +27,8 @@ router.register(r"reports", ReportViewSet, basename="report")
 router.register(r"blocks", BlockViewSet, basename="block")
 router.register(r"profiles", ProfileViewSet, basename="profile")
 router.register(r"members", MemberViewSet, basename="member")
+router.register(r"communities", CommunityViewSet, basename="community")
+router.register(r"projects", ProjectViewSet, basename="project")
 router.register(r"jobs", JobViewSet, basename="job")
 router.register(r"team", TeamMemberViewSet, basename="team")
 router.register(r"scheduler/tasks", TaskViewSet, basename="task")

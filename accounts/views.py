@@ -150,6 +150,78 @@ class ProfileViewSet(mixins.RetrieveModelMixin,
         data = UserSerializer(qs, many=True, context={"request": request}).data
         return Response(data)
 
+    @action(detail=False, methods=["patch"], url_path="me/cover",
+            parser_classes=[MultiPartParser, FormParser])
+    def update_cover(self, request):
+        """Upload a cover banner image for the current user."""
+        user = request.user
+        if "cover_image" in request.FILES:
+            user.cover_image = request.FILES["cover_image"]
+            user.save(update_fields=["cover_image"])
+        return Response(UserSerializer(user, context={"request": request}).data)
+
+    @action(detail=False, methods=["get"], url_path="me/analytics")
+    def my_analytics(self, request):
+        """Career analytics derived from real scheduler tasks + streak."""
+        from scheduler.models import Task
+        u = request.user
+        tasks = Task.objects.filter(user=u)
+        applications = tasks.filter(category="job_deadline").count()
+        interviews = tasks.filter(category="interview").count()
+        referrals = tasks.filter(category="referral_followup").count()
+        networking = tasks.filter(category="networking").count()
+        completed = tasks.filter(completed=True).count()
+        # Career score blends profile completeness, streak, and activity.
+        profile_bits = sum([bool(u.avatar), bool(u.bio), bool(u.university), len(u.skills or []) > 0, u.following.exists()])
+        score = round((profile_bits / 5) * 40 + min(u.streak_count * 3, 20) + min(completed * 2, 20) + min((applications + interviews) * 2, 20))
+        return Response({
+            "applications": applications,
+            "interviews": interviews,
+            "referrals": referrals,
+            "networking": networking,
+            "completed_tasks": completed,
+            "career_score": min(score, 100),
+        })
+
+    @action(detail=False, methods=["get"], url_path="me/achievements")
+    def my_achievements(self, request):
+        """Duolingo-style achievements derived from real signals."""
+        u = request.user
+        from posts.models import Post
+        posts_count = Post.objects.filter(author=u).count()
+        followers = u.followers.count()
+        following = u.following.count()
+        streak = u.streak_count
+        longest = u.longest_streak
+        skills = len(u.skills or [])
+        profile_bits = sum([bool(u.avatar), bool(u.bio), bool(u.university), skills > 0, following > 0])
+        defs = [
+            {"key": "first_post", "title": "First Post", "icon": "create", "desc": "Share your first post", "earned": posts_count >= 1, "progress": min(posts_count, 1), "target": 1},
+            {"key": "prolific", "title": "Prolific", "icon": "albums", "desc": "Publish 10 posts", "earned": posts_count >= 10, "progress": min(posts_count, 10), "target": 10},
+            {"key": "streak_3", "title": "Getting Started", "icon": "flame", "desc": "3 day streak", "earned": longest >= 3, "progress": min(longest, 3), "target": 3},
+            {"key": "streak_7", "title": "On Fire", "icon": "flame", "desc": "7 day streak", "earned": longest >= 7, "progress": min(longest, 7), "target": 7},
+            {"key": "streak_30", "title": "Unstoppable", "icon": "flame", "desc": "30 day streak", "earned": longest >= 30, "progress": min(longest, 30), "target": 30},
+            {"key": "networker", "title": "Networker", "icon": "people", "desc": "Follow 10 people", "earned": following >= 10, "progress": min(following, 10), "target": 10},
+            {"key": "popular", "title": "Popular", "icon": "star", "desc": "Reach 10 followers", "earned": followers >= 10, "progress": min(followers, 10), "target": 10},
+            {"key": "skilled", "title": "Skilled", "icon": "ribbon", "desc": "Add 5 skills", "earned": skills >= 5, "progress": min(skills, 5), "target": 5},
+            {"key": "complete", "title": "All Set", "icon": "checkmark-done", "desc": "Complete your profile", "earned": profile_bits >= 5, "progress": profile_bits, "target": 5},
+        ]
+        return Response({"achievements": defs, "earned_count": sum(1 for d in defs if d["earned"]), "total": len(defs)})
+
+    @action(detail=False, methods=["get"], url_path="me/replies")
+    def my_replies(self, request):
+        """Comments the current user has written (the 'Replies' activity tab)."""
+        from posts.models import Comment
+        from posts.serializers import CommentSerializer
+        qs = Comment.objects.filter(author=request.user).select_related("post").order_by("-created_at")[:50]
+        data = [{
+            "id": c.id,
+            "body": c.body,
+            "post_id": c.post_id,
+            "created_at": c.created_at,
+        } for c in qs]
+        return Response(data)
+
 
 # ---- Streak (per-user, permanent) ----
 from rest_framework.views import APIView
