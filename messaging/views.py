@@ -91,6 +91,36 @@ class ConversationViewSet(viewsets.ModelViewSet):
         convo.save()
         return Response({"detail": "Accepted."})
 
+    @action(detail=True, methods=["post"])
+    def decline(self, request, pk=None):
+        """Decline a message request: remove the receiver from the conversation."""
+        convo = request.user.conversations.filter(pk=pk).first()
+        if not convo:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        convo.participants.remove(request.user)
+        # if nobody meaningful is left, drop the conversation entirely
+        if convo.participants.count() <= 1:
+            convo.delete()
+        return Response({"detail": "Declined."})
+
+    @action(detail=False, methods=["get"])
+    def counts(self, request):
+        """Badge counts: pending message requests + total unread across the inbox."""
+        user = request.user
+        convos = user.conversations.all()
+        # unread request conversations (someone messaged me, not yet accepted)
+        request_convos = convos.filter(is_request=True).exclude(initiator=user)
+        request_count = sum(
+            1 for c in request_convos
+            if c.messages.filter(is_read=False).exclude(sender=user).exists()
+        )
+        # total unread messages across accepted inbox + requests
+        unread_total = (
+            Message.objects.filter(conversation__in=convos, is_read=False)
+            .exclude(sender=user).count()
+        )
+        return Response({"request_count": request_count, "unread_total": unread_total})
+
     @action(detail=True, methods=["get", "post"],
             parser_classes=[MultiPartParser, FormParser, JSONParser])
     def messages(self, request, pk=None):
