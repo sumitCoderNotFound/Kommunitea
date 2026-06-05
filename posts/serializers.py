@@ -9,12 +9,19 @@ class AuthorSerializer(serializers.Serializer):
     university = serializers.CharField(default="")
     badge = serializers.CharField(default="")
     avatar_url = serializers.SerializerMethodField()
+    is_online = serializers.SerializerMethodField()
 
     def get_avatar_url(self, obj):
         if not getattr(obj, "avatar", None):
             return ""
         request = self.context.get("request")
         return request.build_absolute_uri(obj.avatar.url) if request else obj.avatar.url
+
+    def get_is_online(self, obj):
+        from django.utils import timezone
+        from datetime import timedelta
+        seen = getattr(obj, "last_seen", None)
+        return bool(seen and seen > timezone.now() - timedelta(minutes=2))
 
 
 class CommentSerializer(serializers.ModelSerializer):

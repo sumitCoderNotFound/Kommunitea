@@ -149,3 +149,39 @@ def _try_json(raw: str):
         return json.loads(raw[raw.find("{"): raw.rfind("}") + 1])
     except Exception:
         return None
+
+
+# ---------- AI Career Assistant (chat) ----------
+def career_assistant_reply(user_message: str, history: list | None = None, profile: dict | None = None) -> str:
+    """Generate a reply for the in-app AI Career Assistant chat.
+    Falls back to a helpful canned response when no AI provider is configured."""
+    user_message = (user_message or "").strip()
+    if not user_message:
+        return "Ask me anything about your career, CV, interviews, or job search in the UK."
+
+    if providers.ai_enabled():
+        system = (
+            "You are Kommunitea's AI Career Assistant for UK students, graduates and professionals. "
+            "Be warm, concise and practical. Give specific, actionable advice on CVs, interviews, "
+            "job applications, visas (PSW/Graduate route), networking and skills. No emojis. "
+            "Keep replies under 180 words unless asked for detail."
+        )
+        ctx = ""
+        if profile:
+            ctx = (f"\nUser context — name: {profile.get('full_name','')}, course: {profile.get('course','')}, "
+                   f"university: {profile.get('university','')}, skills: {', '.join(profile.get('skills') or [])}.")
+        convo = ""
+        for h in (history or [])[-6:]:
+            role = "Assistant" if h.get("is_ai") else "User"
+            convo += f"\n{role}: {h.get('body','')}"
+        user = f"{ctx}\nConversation so far:{convo}\n\nUser: {user_message}\nAssistant:"
+        try:
+            return providers.complete(system, user, max_tokens=400, temperature=0.6).strip()
+        except Exception:
+            pass
+    # Non-AI fallback
+    return (
+        "Here's a quick steer: focus your CV on measurable results, tailor each application to the role, "
+        "and prepare 3-4 STAR stories for interviews. For UK roles, highlight your right-to-work status early. "
+        "Tell me your target role and I'll give more specific tips. (Connect an AI provider for richer answers.)"
+    )

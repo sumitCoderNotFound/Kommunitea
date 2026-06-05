@@ -92,6 +92,7 @@ class User(AbstractUser):
     streak_count = models.PositiveIntegerField(default=0)
     longest_streak = models.PositiveIntegerField(default=0)
     last_visit = models.DateField(null=True, blank=True)
+    last_seen = models.DateTimeField(null=True, blank=True)  # presence ("online")
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["full_name"]
