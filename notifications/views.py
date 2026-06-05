@@ -22,3 +22,13 @@ class NotificationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     def read_all(self, request):
         request.user.notifications.filter(is_read=False).update(is_read=True)
         return Response({"detail": "All marked read."})
+
+    @action(detail=True, methods=["post"], url_path="read")
+    def mark_read(self, request, pk=None):
+        n = request.user.notifications.filter(pk=pk).first()
+        if not n:
+            return Response({"detail": "Not found."}, status=404)
+        if not n.is_read:
+            n.is_read = True
+            n.save(update_fields=["is_read"])
+        return Response({"detail": "Marked read."})
