@@ -43,6 +43,7 @@ urlpatterns = [
     path("api/auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/me/", MeView.as_view(), name="me"),
     path("api/streak/", StreakView.as_view(), name="streak"),
+    path("api/streak/touch/", StreakView.as_view(), name="streak-touch"),
     path("api/scheduler/opportunities/", OpportunityListView.as_view(), name="opportunities"),
     path("api/scheduler/overview/", SchedulerOverviewView.as_view(), name="scheduler-overview"),
     path("api/auth/my-data/", MyDataExportView.as_view(), name="my-data"),

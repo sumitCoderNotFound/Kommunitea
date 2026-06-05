@@ -110,22 +110,29 @@ class User(AbstractUser):
     def following_count(self):
         return self.following.count()
 
-    def record_visit(self):
-        """Record a daily visit and update streak. Idempotent within a day."""
+    def record_activity(self, activity_type="app_open"):
+        """Record a meaningful daily activity and update the streak.
+        Idempotent for streak purposes within a day; logs per-day activity counts
+        so the consistency grid reflects real data.
+        """
         from datetime import timedelta
         from django.utils import timezone
         today = timezone.localdate()
+
+        # Per-day activity log (real consistency history)
+        day, _ = ActivityDay.objects.get_or_create(user=self, date=today)
+        ActivityDay.objects.filter(pk=day.pk).update(count=models.F("count") + 1)
+
         if self.last_visit == today:
-            return  # already counted today
+            return  # streak already counted today (idempotent)
         if self.last_visit == today - timedelta(days=1):
             self.streak_count += 1  # consecutive day
         else:
-            self.streak_count = 1  # reset / first visit
+            self.streak_count = 1  # reset / first activity
         self.last_visit = today
         if self.streak_count > self.longest_streak:
             self.longest_streak = self.streak_count
         self.save(update_fields=["streak_count", "longest_streak", "last_visit"])
-        # Notify on milestone days (Duolingo-style).
         if self.streak_count in (3, 7, 14, 30, 50, 100, 365):
             try:
                 from notifications.models import Notification
@@ -133,6 +140,10 @@ class User(AbstractUser):
                                   text=f"{self.streak_count} day streak! Keep your momentum alive.")
             except Exception:
                 pass
+
+    # Backward-compatible alias
+    def record_visit(self):
+        self.record_activity("app_open")
 
 
 class FollowRequest(models.Model):
@@ -147,3 +158,17 @@ class FollowRequest(models.Model):
 
     def __str__(self):
         return f"{self.from_user.full_name} -> {self.to_user.full_name}"
+
+
+class ActivityDay(models.Model):
+    """One row per day a user did something — powers the real consistency grid."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="activity_days")
+    date = models.DateField()
+    count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ("user", "date")
+        ordering = ["date"]
+
+    def __str__(self):
+        return f"{self.user_id} {self.date} ({self.count})"

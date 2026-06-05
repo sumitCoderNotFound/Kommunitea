@@ -256,25 +256,40 @@ from rest_framework.views import APIView
 
 
 class StreakView(APIView):
-    """GET returns current streak; POST records today's visit and returns updated streak."""
+    """GET returns full streak data; POST records a meaningful activity and returns it."""
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request):
-        u = request.user
-        return Response({
+    def _payload(self, u):
+        from datetime import timedelta
+        from django.utils import timezone
+        from accounts.models import ActivityDay
+        today = timezone.localdate()
+        # last 90 days of real activity (consistency history)
+        since = today - timedelta(days=89)
+        rows = {a.date: a.count for a in u.activity_days.filter(date__gte=since)}
+        history = [{"date": (since + timedelta(days=i)).isoformat(), "count": rows.get(since + timedelta(days=i), 0)}
+                   for i in range(90)]
+        # this week's activity Mon..Sun
+        monday = today - timedelta(days=today.weekday())
+        week_activity = [bool(rows.get(monday + timedelta(days=i), 0)) for i in range(7)]
+        return {
             "current_streak": u.streak_count,
             "longest_streak": u.longest_streak,
-            "last_visit": u.last_visit,
-        })
+            "last_activity_date": u.last_visit.isoformat() if u.last_visit else None,
+            "has_checked_in_today": u.last_visit == today,
+            "activities_today": rows.get(today, 0),
+            "week_activity": week_activity,
+            "history": history,
+        }
+
+    def get(self, request):
+        return Response(self._payload(request.user))
 
     def post(self, request):
-        u = request.user
-        u.record_visit()
-        return Response({
-            "current_streak": u.streak_count,
-            "longest_streak": u.longest_streak,
-            "last_visit": u.last_visit,
-        })
+        activity_type = request.data.get("activityType") or request.data.get("activity_type") or "app_open"
+        request.user.record_activity(activity_type)
+        request.user.refresh_from_db(fields=["streak_count", "longest_streak", "last_visit"])
+        return Response(self._payload(request.user))
 
 
 # ---- Skills suggestions via ESCO (with curated fallback) ----
