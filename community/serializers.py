@@ -46,16 +46,41 @@ class CommunitySerializer(serializers.ModelSerializer):
 
 
 class ProjectSerializer(serializers.ModelSerializer):
-    image_url = serializers.SerializerMethodField()
-    image = serializers.ImageField(write_only=True, required=False)
+    cover_image = serializers.ImageField(write_only=True, required=False)
+    cover_image_url = serializers.SerializerMethodField()
+    screenshot_urls = serializers.SerializerMethodField()
+    owner = serializers.SerializerMethodField()
+    is_owner = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
-        fields = ["id", "title", "description", "url", "tags", "image", "image_url", "created_at"]
-        read_only_fields = ["id", "created_at"]
+        fields = [
+            "id", "title", "tagline", "description", "category", "status",
+            "cover_image", "cover_image_url", "screenshot_urls", "demo_video",
+            "tech_stack", "links", "looking_for_collaborators", "roles_needed",
+            "visibility", "owner", "is_owner", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "cover_image_url", "screenshot_urls", "owner", "is_owner", "created_at", "updated_at"]
 
-    def get_image_url(self, obj):
-        if not obj.image:
+    def _abs(self, image):
+        if not image:
             return ""
         request = self.context.get("request")
-        return request.build_absolute_uri(obj.image.url) if request else obj.image.url
+        return request.build_absolute_uri(image.url) if request else image.url
+
+    def get_cover_image_url(self, obj):
+        return self._abs(obj.cover_image or obj.image)  # fall back to legacy image
+
+    def get_screenshot_urls(self, obj):
+        return [self._abs(s.image) for s in obj.screenshots.all()]
+
+    def get_owner(self, obj):
+        return {
+            "id": str(obj.owner_id),
+            "fullName": obj.owner.full_name,
+            "avatarUrl": self._abs(getattr(obj.owner, "avatar", None)),
+        }
+
+    def get_is_owner(self, obj):
+        req = self.context.get("request")
+        return bool(req and obj.owner_id == req.user.pk)

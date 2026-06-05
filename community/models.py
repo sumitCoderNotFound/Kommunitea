@@ -71,17 +71,65 @@ class Community(models.Model):
 
 
 class Project(models.Model):
-    """A showcase project a user adds to their profile."""
+    """A showcase project a user adds to their profile (also used for collaboration)."""
+
+    class Category(models.TextChoices):
+        WEB_APP = "web_app", "Web App"
+        MOBILE_APP = "mobile_app", "Mobile App"
+        AI_ML = "ai_ml", "AI/ML"
+        BACKEND = "backend", "Backend"
+        FRONTEND = "frontend", "Frontend"
+        FULL_STACK = "full_stack", "Full Stack"
+        UI_UX = "ui_ux", "UI/UX"
+        STARTUP_IDEA = "startup_idea", "Startup Idea"
+        UNIVERSITY_PROJECT = "university_project", "University Project"
+        OPEN_SOURCE = "open_source", "Open Source"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        IDEA = "idea", "Idea"
+        IN_PROGRESS = "in_progress", "In Progress"
+        COMPLETED = "completed", "Completed"
+        LOOKING_FOR_TEAM = "looking_for_team", "Looking for Team"
+        OPEN_TO_COLLAB = "open_to_collab", "Open to Collaboration"
+
+    class Visibility(models.TextChoices):
+        PUBLIC = "public", "Public"
+        FOLLOWERS = "followers", "Followers only"
+        COMMUNITY = "community", "Community only"
+        PRIVATE = "private", "Private"
+
     owner = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="projects")
     title = models.CharField(max_length=140)
+    tagline = models.CharField(max_length=160, blank=True)
     description = models.TextField(blank=True)
+    category = models.CharField(max_length=24, choices=Category.choices, default=Category.OTHER)
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.IDEA)
+    cover_image = models.ImageField(upload_to="projects/", blank=True, null=True)
+    demo_video = models.URLField(blank=True)
+    tech_stack = models.JSONField(default=list, blank=True)        # ["React", "Django", ...]
+    links = models.JSONField(default=list, blank=True)            # [{"type","label","url"}, ...]
+    looking_for_collaborators = models.BooleanField(default=False)
+    roles_needed = models.JSONField(default=list, blank=True)      # ["frontend", "backend", ...]
+    visibility = models.CharField(max_length=12, choices=Visibility.choices, default=Visibility.PUBLIC)
+    # legacy fields kept for backward compatibility with existing rows
     url = models.URLField(blank=True)
     image = models.ImageField(upload_to="projects/", blank=True, null=True)
     tags = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self):
         return self.title
+
+
+class ProjectScreenshot(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="screenshots")
+    image = models.ImageField(upload_to="project_shots/")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]

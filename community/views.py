@@ -30,8 +30,10 @@ class MemberViewSet(mixins.CreateModelMixin,
 
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from .models import Community, Project
+from .models import Community, Project, ProjectScreenshot
 from .serializers import CommunitySerializer, ProjectSerializer
 
 
@@ -103,29 +105,59 @@ class ProjectViewSet(viewsets.ModelViewSet):
     """User showcase projects. ?user=<id> lists a given user's projects; default = mine."""
     serializer_class = ProjectSerializer
     permission_classes = [permissions.IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    # Inherit the global CamelCase parsers (JSON + MultiPart + Form) so incoming
+    # camelCase keys like techStack/rolesNeeded are converted to snake_case.
 
     def get_queryset(self):
         user_id = self.request.query_params.get("user")
         if user_id:
-            return Project.objects.filter(owner_id=user_id)
-        return Project.objects.filter(owner=self.request.user)
+            return Project.objects.filter(owner_id=user_id).prefetch_related("screenshots")
+        return Project.objects.filter(owner=self.request.user).prefetch_related("screenshots")
 
-    def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+    def _parsed_data(self):
+        """Multipart sends arrays as JSON strings; parse them so the serializer gets real lists."""
+        import json
+        data = {k: v for k, v in self.request.data.items()}
+        for key in ("tech_stack", "links", "roles_needed"):
+            val = data.get(key)
+            if isinstance(val, str):
+                try:
+                    data[key] = json.loads(val)
+                except (ValueError, TypeError):
+                    data[key] = []
+        # normalise the boolean from multipart strings
+        if "looking_for_collaborators" in data and isinstance(data["looking_for_collaborators"], str):
+            data["looking_for_collaborators"] = data["looking_for_collaborators"].lower() in ("1", "true", "yes")
+        return data
 
-    def get_object(self):
-        obj = super().get_object()
-        return obj
+    def _save_screenshots(self, project):
+        shots = self.request.FILES.getlist("screenshots")
+        for f in shots:
+            ProjectScreenshot.objects.create(project=project, image=f)
 
-    def perform_update(self, serializer):
-        if serializer.instance.owner_id != self.request.user.pk:
-            from rest_framework.exceptions import PermissionDenied
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=self._parsed_data())
+        serializer.is_valid(raise_exception=True)
+        project = serializer.save(owner=request.user)
+        self._save_screenshots(project)
+        out = self.get_serializer(project)
+        return Response(out.data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.owner_id != request.user.pk:
             raise PermissionDenied("Not your project.")
-        serializer.save()
+        partial = kwargs.pop("partial", False)
+        serializer = self.get_serializer(instance, data=self._parsed_data(), partial=partial)
+        serializer.is_valid(raise_exception=True)
+        project = serializer.save()
+        # replace screenshots only if new ones were uploaded
+        if request.FILES.getlist("screenshots"):
+            instance.screenshots.all().delete()
+            self._save_screenshots(project)
+        return Response(self.get_serializer(project).data)
 
     def perform_destroy(self, instance):
         if instance.owner_id != self.request.user.pk:
-            from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Not your project.")
         instance.delete()
