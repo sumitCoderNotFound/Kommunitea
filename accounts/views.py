@@ -150,6 +150,34 @@ class ProfileViewSet(mixins.RetrieveModelMixin,
         data = UserSerializer(qs, many=True, context={"request": request}).data
         return Response(data)
 
+    @action(detail=False, methods=["get"], url_path="me/active-nearby")
+    def active_nearby(self, request):
+        """Members from the same university who are active now (presence within 2 min)."""
+        from django.utils import timezone
+        from datetime import timedelta
+        from django.db.models import Q
+        user = request.user
+        cutoff = timezone.now() - timedelta(minutes=2)
+        qs = User.objects.filter(last_seen__gte=cutoff).exclude(pk=user.pk)
+        scope = "everyone"
+        if user.university:
+            uni_qs = qs.filter(university__iexact=user.university)
+            if uni_qs.exists():
+                qs = uni_qs
+                scope = "university"
+        elif user.city:
+            city_qs = qs.filter(city__iexact=user.city)
+            if city_qs.exists():
+                qs = city_qs
+                scope = "city"
+        sample = qs[:6]
+        return Response({
+            "count": qs.count(),
+            "scope": scope,
+            "where": user.university if scope == "university" else (user.city if scope == "city" else ""),
+            "users": UserSerializer(sample, many=True, context={"request": request}).data,
+        })
+
     @action(detail=False, methods=["patch"], url_path="me/cover",
             parser_classes=[MultiPartParser, FormParser])
     def update_cover(self, request):

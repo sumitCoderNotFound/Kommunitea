@@ -53,6 +53,38 @@ class CommunityViewSet(viewsets.ModelViewSet):
             qs = qs.filter(members=self.request.user)
         return qs
 
+    @action(detail=False, methods=["get"])
+    def suggestions(self, request):
+        """Communities the user hasn't joined yet, ranked by relevance.
+        Relevance: same category as the user's interests / university match, then by member count."""
+        qs = Community.objects.all()
+        user = request.user
+        joined_ids = set()
+        if user.is_authenticated:
+            joined_ids = set(user.communities_joined.values_list("id", flat=True)) if hasattr(user, "communities_joined") else set(
+                Community.objects.filter(members=user).values_list("id", flat=True))
+            qs = qs.exclude(id__in=joined_ids)
+
+        from django.db.models import Count
+        items = list(qs.annotate(mc=Count("members")))
+
+        def rank(c):
+            score = 0
+            if user.is_authenticated:
+                uni = (getattr(user, "university", "") or "").lower()
+                interests = [i.lower() for i in (getattr(user, "interests", []) or [])]
+                blob = f"{c.name} {c.description} {c.category}".lower()
+                if uni and uni.split()[0] in blob:
+                    score += 5
+                if any(i in blob for i in interests):
+                    score += 3
+            score += min(c.mc, 50) / 50.0
+            return score
+
+        items.sort(key=rank, reverse=True)
+        top = items[:8]
+        return Response(CommunitySerializer(top, many=True, context={"request": request}).data)
+
     @action(detail=True, methods=["post"])
     def join(self, request, pk=None):
         community = self.get_object()
