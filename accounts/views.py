@@ -48,6 +48,13 @@ class ProfileViewSet(mixins.RetrieveModelMixin,
     filterset_class = ProfileFilter
     search_fields = ["full_name", "university", "skills", "city"]
 
+    def get_queryset(self):
+        # Don't show the current user in the browse/search list (they can't follow themselves).
+        qs = User.objects.all().order_by("-created_at")
+        if self.action == "list" and self.request.user.is_authenticated:
+            qs = qs.exclude(pk=self.request.user.pk)
+        return qs
+
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
             return [permissions.AllowAny()]
