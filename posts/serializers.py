@@ -79,11 +79,15 @@ class StorySerializer(serializers.ModelSerializer):
     author = AuthorSerializer(read_only=True)
     image_url = serializers.SerializerMethodField()
     image = serializers.ImageField(write_only=True)
+    likes_count = serializers.SerializerMethodField()
+    is_liked = serializers.SerializerMethodField()
+    views_count = serializers.SerializerMethodField()
 
     class Meta:
         from .models import Story
         model = Story
-        fields = ["id", "author", "image", "image_url", "caption", "created_at", "expires_at"]
+        fields = ["id", "author", "image", "image_url", "caption", "visibility",
+                  "likes_count", "is_liked", "views_count", "created_at", "expires_at"]
         read_only_fields = ["id", "author", "created_at", "expires_at"]
 
     def get_image_url(self, obj):
@@ -91,3 +95,16 @@ class StorySerializer(serializers.ModelSerializer):
             return ""
         request = self.context.get("request")
         return request.build_absolute_uri(obj.image.url) if request else obj.image.url
+
+    def get_likes_count(self, obj):
+        return obj.liked_by.count()
+
+    def get_is_liked(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user and user.is_authenticated:
+            return obj.liked_by.filter(pk=user.pk).exists()
+        return False
+
+    def get_views_count(self, obj):
+        return obj.viewed_by.count()

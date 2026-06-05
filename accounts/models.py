@@ -123,6 +123,14 @@ class User(AbstractUser):
         if self.streak_count > self.longest_streak:
             self.longest_streak = self.streak_count
         self.save(update_fields=["streak_count", "longest_streak", "last_visit"])
+        # Notify on milestone days (Duolingo-style).
+        if self.streak_count in (3, 7, 14, 30, 50, 100, 365):
+            try:
+                from notifications.models import Notification
+                Notification.push(self, self, Notification.Verb.STREAK,
+                                  text=f"{self.streak_count} day streak! Keep your momentum alive.")
+            except Exception:
+                pass
 
 
 class FollowRequest(models.Model):

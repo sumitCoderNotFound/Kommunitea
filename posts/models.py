@@ -45,15 +45,36 @@ class Comment(models.Model):
 
 class Story(models.Model):
     """Instagram-style story: an image that expires after 24 hours."""
+    class Visibility(models.TextChoices):
+        PUBLIC = "public", "Public"
+        FOLLOWERS = "followers", "Followers only"
+        COMMUNITY = "community", "Community only"
+        PRIVATE = "private", "Private"
+
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="stories")
     image = models.ImageField(upload_to="stories/")
     caption = models.CharField(max_length=200, blank=True)
+    visibility = models.CharField(max_length=20, choices=Visibility.choices, default=Visibility.PUBLIC)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     viewed_by = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="viewed_stories", blank=True)
+    liked_by = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="liked_stories", blank=True)
 
     class Meta:
         ordering = ["-created_at"]
+
+    def visible_to(self, user):
+        """Whether `user` may see this story under its visibility setting."""
+        if user and user.is_authenticated and user.pk == self.author_id:
+            return True
+        if self.visibility == self.Visibility.PUBLIC:
+            return True
+        if self.visibility == self.Visibility.PRIVATE:
+            return False
+        if not (user and user.is_authenticated):
+            return False
+        # followers-only and community-only: visible to approved followers of the author
+        return self.author.followers.filter(pk=user.pk).exists()
 
     def save(self, *args, **kwargs):
         from datetime import timedelta

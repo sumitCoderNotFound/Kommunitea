@@ -10,6 +10,11 @@ class Notification(models.Model):
         FOLLOW = "follow", "started following you"
         REQUEST = "request", "requested to follow you"
         MESSAGE = "message", "sent you a message"
+        FOLLOW_ACCEPTED = "follow_accepted", "accepted your follow request"
+        STORY_LIKE = "story_like", "liked your story"
+        STORY_REPLY = "story_reply", "replied to your story"
+        STORY_SHARE = "story_share", "shared your story"
+        STREAK = "streak", "reached a streak milestone"
 
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")

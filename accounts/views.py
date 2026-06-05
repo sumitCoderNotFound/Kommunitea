@@ -126,6 +126,30 @@ class ProfileViewSet(mixins.RetrieveModelMixin,
         FollowRequest.objects.filter(from_user_id=pk, to_user=request.user).delete()
         return Response({"detail": "Rejected."})
 
+    @action(detail=True, methods=["get"])
+    def followers(self, request, pk=None):
+        """Users who follow this profile (optional ?search=)."""
+        target = self.get_object()
+        qs = target.followers.all()
+        search = request.query_params.get("search", "").strip()
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(Q(full_name__icontains=search) | Q(university__icontains=search) | Q(course__icontains=search))
+        data = UserSerializer(qs, many=True, context={"request": request}).data
+        return Response(data)
+
+    @action(detail=True, methods=["get"])
+    def following(self, request, pk=None):
+        """Users this profile follows (optional ?search=)."""
+        target = self.get_object()
+        qs = target.following.all()
+        search = request.query_params.get("search", "").strip()
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(Q(full_name__icontains=search) | Q(university__icontains=search) | Q(course__icontains=search))
+        data = UserSerializer(qs, many=True, context={"request": request}).data
+        return Response(data)
+
 
 # ---- Streak (per-user, permanent) ----
 from rest_framework.views import APIView
