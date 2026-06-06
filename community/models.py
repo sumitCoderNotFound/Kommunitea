@@ -61,6 +61,7 @@ class Community(models.Model):
     category = models.CharField(max_length=20, choices=Category.choices, default=Category.OTHER)
     image = models.ImageField(upload_to="communities/", blank=True, null=True)
     members = models.ManyToManyField("accounts.User", related_name="communities", blank=True)
+    created_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="created_communities")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

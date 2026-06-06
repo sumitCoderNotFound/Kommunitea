@@ -1,4 +1,6 @@
-from rest_framework import mixins, viewsets, permissions
+from rest_framework import mixins, viewsets, permissions, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
 from .models import Member
 from .serializers import MemberSerializer
@@ -28,8 +30,6 @@ class MemberViewSet(mixins.CreateModelMixin,
         return qs
 
 
-from rest_framework.decorators import action
-from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -56,7 +56,7 @@ class CommunityViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        community = serializer.save()
+        community = serializer.save(created_by=self.request.user)
         community.members.add(self.request.user)
 
     @action(detail=False, methods=["get"])
@@ -95,6 +95,10 @@ class CommunityViewSet(viewsets.ModelViewSet):
     def join(self, request, pk=None):
         community = self.get_object()
         community.members.add(request.user)
+        if community.created_by and community.created_by != request.user:
+            from notifications.models import Notification
+            Notification.push(community.created_by, request.user, Notification.Verb.LIKE,
+                              text=f"joined {community.name}", target_type="community", community_id=str(community.id))
         return Response({"detail": "Joined.", "is_member": True, "members_count": community.members.count()})
 
     @action(detail=True, methods=["post"])
@@ -102,6 +106,59 @@ class CommunityViewSet(viewsets.ModelViewSet):
         community = self.get_object()
         community.members.remove(request.user)
         return Response({"detail": "Left.", "is_member": False, "members_count": community.members.count()})
+
+    @action(detail=True, methods=["get", "post"], url_path="posts")
+    def posts(self, request, pk=None):
+        """List community posts (members see all; non-members see public preview), or create one (members only)."""
+        from posts.models import Post
+        from posts.serializers import PostSerializer
+        community = self.get_object()
+        is_member = request.user.is_authenticated and community.members.filter(pk=request.user.pk).exists()
+        if request.method == "GET":
+            qs = community.posts.all()
+            if not is_member:
+                qs = qs.filter(visibility="public")  # preview for non-members
+            return Response(PostSerializer(qs, many=True, context={"request": request}).data)
+        # POST — create a community post
+        if not is_member:
+            return Response({"detail": "Join this community to post."}, status=status.HTTP_403_FORBIDDEN)
+        body = (request.data.get("body") or "").strip()
+        if not body:
+            return Response({"detail": "Post cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
+        post = Post.objects.create(
+            author=request.user, body=body, community=community,
+            visibility=request.data.get("visibility", "community_only"),
+            category=request.data.get("category", "university_life"),
+        )
+        if community.created_by and community.created_by != request.user:
+            from notifications.models import Notification
+            Notification.push(community.created_by, request.user, Notification.Verb.LIKE,
+                              text=f"posted in {community.name}", post_id=post.id,
+                              target_type="community", community_id=str(community.id))
+        return Response(PostSerializer(post, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get"])
+    def members(self, request, pk=None):
+        """List community members."""
+        from accounts.serializers import UserSerializer
+        community = self.get_object()
+        users = community.members.all()[:200]
+        return Response(UserSerializer(users, many=True, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"])
+    def chat(self, request, pk=None):
+        """Get or create the community group chat (members only)."""
+        from messaging.models import Conversation
+        from messaging.serializers import ConversationSerializer
+        community = self.get_object()
+        if not community.members.filter(pk=request.user.pk).exists():
+            return Response({"detail": "Join this community to access chat."}, status=status.HTTP_403_FORBIDDEN)
+        convo = Conversation.objects.filter(community=community, kind=Conversation.Kind.COMMUNITY).first()
+        if not convo:
+            convo = Conversation.objects.create(kind=Conversation.Kind.COMMUNITY, title=community.name,
+                                                community=community, owner=community.created_by or request.user)
+        convo.participants.add(*community.members.all())
+        return Response(ConversationSerializer(convo, context={"request": request}).data)
 
 
 @extend_schema(tags=["Projects"])

@@ -20,6 +20,7 @@ class Conversation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_request = models.BooleanField(default=False)  # pending message request
+    community = models.ForeignKey("community.Community", on_delete=models.CASCADE, null=True, blank=True, related_name="conversations")
     initiator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
                                   null=True, blank=True, related_name="initiated_conversations")
 
