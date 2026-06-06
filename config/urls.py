@@ -14,7 +14,7 @@ from messaging.views import ConversationViewSet
 from notifications.views import NotificationViewSet
 from moderation.views import ReportViewSet, BlockViewSet
 from community.views import MemberViewSet, CommunityViewSet, ProjectViewSet
-from jobs.views import JobViewSet
+from jobs.views import JobViewSet, SponsorCompanyViewSet
 from team.views import TeamMemberViewSet
 from scheduler.views import TaskViewSet, WeeklyGoalViewSet, OpportunityListView, SchedulerOverviewView, JobApplicationViewSet
 
@@ -30,6 +30,7 @@ router.register(r"members", MemberViewSet, basename="member")
 router.register(r"communities", CommunityViewSet, basename="community")
 router.register(r"projects", ProjectViewSet, basename="project")
 router.register(r"jobs", JobViewSet, basename="job")
+router.register(r"career-tools/sponsor-companies", SponsorCompanyViewSet, basename="sponsor-company")
 router.register(r"team", TeamMemberViewSet, basename="team")
 router.register(r"scheduler/tasks", TaskViewSet, basename="task")
 router.register(r"scheduler/goals", WeeklyGoalViewSet, basename="weeklygoal")
@@ -51,6 +52,7 @@ urlpatterns = [
     path("api/auth/delete-account/", DeleteAccountView.as_view(), name="delete-account"),
     path("api/skills/suggest/", SkillSuggestView.as_view(), name="skill-suggest"),
     # API
+    path("api/career-tools/sponsorship-jobs/", JobViewSet.as_view({"get": "list"}), name="sponsorship-jobs"),
     path("api/", include(router.urls)),
     # Swagger
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),

@@ -3,8 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from config.permissions import IsAdminOrReadOnly
 from drf_spectacular.utils import extend_schema
-from .models import Job
-from .serializers import JobSerializer
+from .models import Job, SponsorCompany
+from .serializers import JobSerializer, SponsorCompanySerializer
 
 
 @extend_schema(tags=["Jobs"])
@@ -12,8 +12,8 @@ class JobViewSet(viewsets.ModelViewSet):
     """Job board: anyone can read; only staff/moderators can create, update, delete."""
     serializer_class = JobSerializer
     permission_classes = [IsAdminOrReadOnly]
-    filterset_fields = ["job_type", "visa_sponsorship", "location", "is_active"]
-    search_fields = ["title", "company", "location", "description"]
+    filterset_fields = ["job_type", "visa_sponsorship", "location", "country", "experience_level", "is_active"]
+    search_fields = ["title", "company", "location", "description", "skills"]
 
     def get_permissions(self):
         if self.action in ["save_job", "apply_job"]:
@@ -55,3 +55,13 @@ class JobViewSet(viewsets.ModelViewSet):
         if self.action == "list" and self.request.query_params.get("all") != "true":
             qs = qs.filter(is_active=True)
         return qs
+
+
+@extend_schema(tags=["Jobs"])
+class SponsorCompanyViewSet(viewsets.ReadOnlyModelViewSet):
+    """Public list of visa-sponsoring companies (seeded + admin-added)."""
+    serializer_class = SponsorCompanySerializer
+    permission_classes = [permissions.AllowAny]
+    queryset = SponsorCompany.objects.all()
+    filterset_fields = ["country", "industry", "sponsorship_confidence"]
+    search_fields = ["name", "industry"]
