@@ -50,8 +50,5 @@ class RunRemindersView(APIView):
         secret = getattr(dj_settings, "CRON_SECRET", None)
         if secret and request.headers.get("X-Cron-Secret") != secret:
             return Response({"detail": "Forbidden."}, status=403)
-        due = Reminder.objects.filter(fired=False, due_at__lte=timezone.now())[:500]
-        fired = 0
-        for r in due:
-            r.fire(); fired += 1
-        return Response({"fired": fired})
+        from .scheduler import run_due_reminders
+        return Response({"fired": run_due_reminders()})
