@@ -67,7 +67,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         convo.participants.add(request.user, *members)
         # notify added members
         for m in members:
-            Notification.push(m, request.user, Notification.Verb.MESSAGE, text=f"added you to {title}")
+            Notification.push(m, request.user, Notification.Verb.MESSAGE, text=f"added you to {title}", conversation_id=convo.id)
         return Response(self.get_serializer(convo).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["get"], url_path="ai")
@@ -174,7 +174,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
                     "document": "Document", "location": "Location",
                 }.get(kind, "Message")
                 for other in convo.participants.exclude(pk=request.user.pk):
-                    Notification.push(other, request.user, Notification.Verb.MESSAGE, text=preview)
+                    Notification.push(other, request.user, Notification.Verb.MESSAGE, text=preview, conversation_id=convo.id)
             return Response(MessageSerializer(msg, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
         # GET: mark incoming as read, return all
@@ -198,7 +198,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         msg.viewed_at = timezone.now()
         msg.save(update_fields=["viewed_at"])
         if msg.sender_id:
-            Notification.push(msg.sender, request.user, Notification.Verb.VIEW_ONCE_OPENED, text="opened your photo")
+            Notification.push(msg.sender, request.user, Notification.Verb.VIEW_ONCE_OPENED, text="opened your photo", conversation_id=convo.id)
         return Response({"viewed": True, "imageUrl": url})
 
     @action(detail=True, methods=["post"], url_path=r"messages/(?P<message_id>[^/.]+)/react")
@@ -216,5 +216,5 @@ class ConversationViewSet(viewsets.ModelViewSet):
         else:
             MessageReaction.objects.update_or_create(message=msg, user=request.user, defaults={"emoji": emoji})
             if msg.sender_id and msg.sender_id != request.user.pk:
-                Notification.push(msg.sender, request.user, Notification.Verb.MESSAGE_REACTION, text=emoji)
+                Notification.push(msg.sender, request.user, Notification.Verb.MESSAGE_REACTION, text=emoji, conversation_id=convo.id)
         return Response(MessageSerializer(msg, context={"request": request}).data)

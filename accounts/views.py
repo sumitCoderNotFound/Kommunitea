@@ -86,10 +86,10 @@ class ProfileViewSet(mixins.RetrieveModelMixin,
         if target.is_private:
             # private account -> create a pending request
             FollowRequest.objects.get_or_create(from_user=request.user, to_user=target)
-            Notification.push(target, request.user, Notification.Verb.REQUEST)
+            Notification.push(target, request.user, Notification.Verb.REQUEST, user_id=request.user.id)
             return Response({"detail": "Request sent.", "status": "requested"})
         request.user.following.add(target)
-        Notification.push(target, request.user, Notification.Verb.FOLLOW)
+        Notification.push(target, request.user, Notification.Verb.FOLLOW, user_id=request.user.id)
         return Response({"detail": "Following.", "status": "following"})
 
     @action(detail=True, methods=["post"])
@@ -117,7 +117,7 @@ class ProfileViewSet(mixins.RetrieveModelMixin,
         if not fr:
             return Response({"detail": "No request."}, status=status.HTTP_404_NOT_FOUND)
         fr.from_user.following.add(request.user)
-        Notification.push(fr.from_user, request.user, Notification.Verb.FOLLOW, text="accepted your follow request")
+        Notification.push(fr.from_user, request.user, Notification.Verb.FOLLOW, text="accepted your follow request", user_id=request.user.id)
         fr.delete()
         return Response({"detail": "Accepted."})
 

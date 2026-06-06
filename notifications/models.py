@@ -23,6 +23,15 @@ class Notification(models.Model):
     verb = models.CharField(max_length=20, choices=Verb.choices)
     text = models.CharField(max_length=255, blank=True)
     post_id = models.IntegerField(null=True, blank=True)
+    # navigation targets so a tap opens the exact item
+    conversation_id = models.CharField(max_length=64, blank=True)
+    target_type = models.CharField(max_length=24, blank=True)
+    target_id = models.CharField(max_length=64, blank=True)
+    story_id = models.CharField(max_length=64, blank=True)
+    user_id = models.CharField(max_length=64, blank=True)
+    job_id = models.CharField(max_length=64, blank=True)
+    event_id = models.CharField(max_length=64, blank=True)
+    referral_id = models.CharField(max_length=64, blank=True)
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -30,11 +39,15 @@ class Notification(models.Model):
         ordering = ["-created_at"]
 
     @classmethod
-    def push(cls, recipient, actor, verb, text="", post_id=None):
-        # Don't notify yourself
-        if recipient == actor:
+    def push(cls, recipient, actor, verb, text="", post_id=None, **targets):
+        # Don't notify yourself (streak is the one self-notification we allow)
+        if recipient == actor and verb != cls.Verb.STREAK:
             return None
-        return cls.objects.create(recipient=recipient, actor=actor, verb=verb, text=text, post_id=post_id)
+        allowed = {"conversation_id", "target_type", "target_id", "story_id",
+                   "user_id", "job_id", "event_id", "referral_id"}
+        extra = {k: str(v) for k, v in targets.items() if k in allowed and v is not None}
+        return cls.objects.create(recipient=recipient, actor=actor, verb=verb,
+                                  text=text, post_id=post_id, **extra)
 
     def __str__(self):
         return f"{self.actor.full_name} {self.get_verb_display()}"

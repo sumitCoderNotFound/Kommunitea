@@ -46,7 +46,10 @@ class User(AbstractUser):
         STUDENT = "student", "Student"
         GRADUATE = "graduate", "Graduate"
         PROFESSIONAL = "professional", "Working Professional"
+        JOB_SEEKER = "job_seeker", "Job Seeker"
         RECRUITER = "recruiter", "Recruiter"
+        CREATOR = "creator", "Creator"
+        NEWCOMER = "newcomer", "New to UK"
 
     username = None  # remove username; use email
     email = models.EmailField(unique=True)
@@ -71,6 +74,24 @@ class User(AbstractUser):
     display_company = models.BooleanField(default=True)
     open_to_networking = models.BooleanField(default=True)
     open_to_referrals = models.BooleanField(default=False)
+    open_to_mentoring = models.BooleanField(default=False)
+    # job seeker
+    target_role = models.CharField(max_length=160, blank=True)
+    experience_level = models.CharField(max_length=60, blank=True)  # Entry/Mid/Senior
+    job_type = models.CharField(max_length=60, blank=True)  # Full-time/Part-time/Internship
+    cv_uploaded = models.BooleanField(default=False)
+    # recruiter
+    company_website = models.URLField(blank=True)
+    # creator
+    content_niche = models.CharField(max_length=120, blank=True)
+    instagram = models.URLField(blank=True)
+    youtube = models.URLField(blank=True)
+    tiktok = models.URLField(blank=True)
+    creator_topics = models.JSONField(default=list, blank=True)
+    # newcomer / new to UK
+    destination_city = models.CharField(max_length=120, blank=True)
+    arrival_date = models.CharField(max_length=20, blank=True)  # "September 2025"
+    newcomer_needs = models.JSONField(default=list, blank=True)  # accommodation, sim, bank, visa...
     city = models.CharField(max_length=80, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, blank=True)
     skills = models.JSONField(default=list, blank=True)

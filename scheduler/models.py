@@ -67,11 +67,23 @@ class Task(models.Model):
 
 
 class WeeklyGoal(models.Model):
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        COMPLETED = "completed", "Completed"
+        ARCHIVED = "archived", "Archived"
+
+    class Kind(models.TextChoices):
+        JOBS = "jobs", "Job Applications"
+        NETWORKING = "networking", "Networking"
+        CUSTOM = "custom", "Custom"
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="weekly_goals")
     title = models.CharField(max_length=160)
     target = models.PositiveIntegerField(default=1)
     progress = models.PositiveIntegerField(default=0)
-    week_start = models.DateField(default=timezone.now)  # Monday of the goal's week
+    kind = models.CharField(max_length=12, choices=Kind.choices, default=Kind.CUSTOM)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
+    week_start = models.DateField(default=timezone.localdate)  # Monday of the goal's week
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -83,6 +95,39 @@ class WeeklyGoal(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class JobApplication(models.Model):
+    """Tracks a single job/application inside the Plan, optionally linked to a goal."""
+    class Status(models.TextChoices):
+        SAVED = "saved", "Saved"
+        APPLIED = "applied", "Applied"
+        RESPONSE = "response", "Response received"
+        INTERVIEW = "interview", "Interview"
+        REJECTED = "rejected", "Rejected"
+        OFFER = "offer", "Offer"
+        FOLLOW_UP = "follow_up", "Follow-up needed"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="applications")
+    goal = models.ForeignKey(WeeklyGoal, on_delete=models.SET_NULL, null=True, blank=True, related_name="applications")
+    job = models.ForeignKey("jobs.Job", on_delete=models.SET_NULL, null=True, blank=True, related_name="applications")
+    company = models.CharField(max_length=160)
+    role_title = models.CharField(max_length=160, blank=True)
+    job_link = models.URLField(blank=True)
+    source = models.CharField(max_length=80, blank=True)  # LinkedIn, Indeed, Referral, etc.
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.SAVED)
+    applied_date = models.DateField(null=True, blank=True)
+    follow_up_date = models.DateField(null=True, blank=True)
+    reminder_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"{self.role_title or 'Role'} @ {self.company} ({self.status})"
 
 
 class Opportunity(models.Model):

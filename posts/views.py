@@ -132,7 +132,7 @@ class StoryViewSet(viewsets.ModelViewSet):
             story.liked_by.add(request.user)
             liked = True
             if story.author_id != request.user.pk:
-                Notification.push(story.author, request.user, Notification.Verb.STORY_LIKE)
+                Notification.push(story.author, request.user, Notification.Verb.STORY_LIKE, story_id=story.id)
         return Response({"liked": liked, "likes_count": story.liked_by.count()})
 
     @action(detail=True, methods=["post"])
@@ -162,7 +162,7 @@ class StoryViewSet(viewsets.ModelViewSet):
             convo.save()
         Message.objects.create(conversation=convo, sender=request.user, body=f"Replied to your story: {body}")
         convo.save()
-        Notification.push(story.author, request.user, Notification.Verb.STORY_REPLY, text=body[:60])
+        Notification.push(story.author, request.user, Notification.Verb.STORY_REPLY, text=body[:60], story_id=story.id)
         return Response({"detail": "Reply sent.", "conversation_id": str(convo.pk)}, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
@@ -194,5 +194,5 @@ class StoryViewSet(viewsets.ModelViewSet):
             convo.save()
             sent += 1
         if story.author_id != request.user.pk and sent:
-            Notification.push(story.author, request.user, Notification.Verb.STORY_SHARE)
+            Notification.push(story.author, request.user, Notification.Verb.STORY_SHARE, story_id=story.id)
         return Response({"detail": f"Shared with {sent} people.", "shared": sent})

@@ -3,11 +3,12 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
 
-from .models import Task, WeeklyGoal, Opportunity
-from .serializers import TaskSerializer, WeeklyGoalSerializer, OpportunitySerializer
+from .models import Task, WeeklyGoal, Opportunity, JobApplication
+from .serializers import TaskSerializer, WeeklyGoalSerializer, OpportunitySerializer, JobApplicationSerializer
 
 
 @extend_schema(tags=["Scheduler"])
@@ -33,6 +34,65 @@ class WeeklyGoalViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=["post"], url_path="increment")
+    def increment(self, request, pk=None):
+        """Bump goal progress by +1 (capped at target). Marks completed when reached."""
+        goal = self.get_object()
+        goal.progress = min(goal.progress + 1, goal.target)
+        if goal.progress >= goal.target:
+            goal.status = WeeklyGoal.Status.COMPLETED
+        goal.save(update_fields=["progress", "status"])
+        return Response(self.get_serializer(goal).data)
+
+
+@extend_schema(tags=["Scheduler"])
+class JobApplicationViewSet(viewsets.ModelViewSet):
+    """The application tracker inside Plan: Saved -> Applied -> Interview -> Offer ..."""
+    serializer_class = JobApplicationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ["status", "goal"]
+
+    def get_queryset(self):
+        return JobApplication.objects.filter(user=self.request.user)
+
+    def _sync_goal(self, goal):
+        """Recompute a linked goal's progress from its applications (applied+ counts)."""
+        if not goal:
+            return
+        advanced = goal.applications.exclude(status=JobApplication.Status.SAVED).count()
+        goal.progress = min(advanced, goal.target)
+        if goal.progress >= goal.target:
+            goal.status = WeeklyGoal.Status.COMPLETED
+        goal.save(update_fields=["progress", "status"])
+
+    def perform_create(self, serializer):
+        obj = serializer.save(user=self.request.user)
+        if obj.status == JobApplication.Status.APPLIED and not obj.applied_date:
+            obj.applied_date = timezone.localdate()
+            obj.save(update_fields=["applied_date"])
+        self._sync_goal(obj.goal)
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        if obj.status == JobApplication.Status.APPLIED and not obj.applied_date:
+            obj.applied_date = timezone.localdate()
+            obj.save(update_fields=["applied_date"])
+        self._sync_goal(obj.goal)
+
+    @action(detail=True, methods=["post"], url_path="status")
+    def set_status(self, request, pk=None):
+        """One-tap status update from a job card / tracker."""
+        app = self.get_object()
+        new_status = request.data.get("status")
+        if new_status not in dict(JobApplication.Status.choices):
+            return Response({"detail": "Invalid status."}, status=status.HTTP_400_BAD_REQUEST)
+        app.status = new_status
+        if new_status == JobApplication.Status.APPLIED and not app.applied_date:
+            app.applied_date = timezone.localdate()
+        app.save()
+        self._sync_goal(app.goal)
+        return Response(self.get_serializer(app).data)
 
 
 @extend_schema(tags=["Scheduler"])

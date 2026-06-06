@@ -55,6 +55,10 @@ class CommunityViewSet(viewsets.ModelViewSet):
             qs = qs.filter(members=self.request.user)
         return qs
 
+    def perform_create(self, serializer):
+        community = serializer.save()
+        community.members.add(self.request.user)
+
     @action(detail=False, methods=["get"])
     def suggestions(self, request):
         """Communities the user hasn't joined yet, ranked by relevance.
