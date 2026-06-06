@@ -106,6 +106,16 @@ class User(AbstractUser):
     badge = models.CharField(max_length=20, choices=Badge.choices, blank=True)
     is_onboarded = models.BooleanField(default=False)
     is_private = models.BooleanField(default=False)  # private = follow requests need approval
+
+    class MessagesFrom(models.TextChoices):
+        EVERYONE = "everyone", "Everyone"
+        FOLLOWERS = "followers", "Followers"
+        CONNECTIONS = "connections", "Connections"
+        NO_ONE = "no_one", "No one"
+
+    allow_messages_from = models.CharField(max_length=16, choices=MessagesFrom.choices, default=MessagesFrom.EVERYONE)
+    allow_story_sharing = models.BooleanField(default=True)
+    allow_post_reshare = models.BooleanField(default=True)
     following = models.ManyToManyField("self", symmetrical=False, related_name="followers", blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

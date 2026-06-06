@@ -13,8 +13,8 @@ class MessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
         fields = ["id", "sender", "body", "kind", "image_url", "file_url", "file_name", "gif_url",
-                  "lat", "lng", "viewed", "reactions", "is_ai", "is_read", "created_at"]
-        read_only_fields = ["id", "sender", "kind", "image_url", "file_url", "gif_url", "viewed",
+                  "lat", "lng", "shared_id", "shared_payload", "viewed", "reactions", "is_ai", "is_read", "created_at"]
+        read_only_fields = ["id", "sender", "image_url", "file_url", "gif_url", "viewed",
                             "reactions", "is_ai", "is_read", "created_at"]
 
     def _me(self):

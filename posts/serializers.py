@@ -41,14 +41,19 @@ class PostSerializer(serializers.ModelSerializer):
     saves_count = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
     is_saved = serializers.SerializerMethodField()
+    reshares_count = serializers.SerializerMethodField()
     comments = CommentSerializer(many=True, read_only=True)
     image = serializers.ImageField(write_only=True, required=False)
+
+    def get_reshares_count(self, obj):
+        return obj.reshares.count()
 
     class Meta:
         model = Post
         fields = [
             "id", "author", "body", "image", "image_url", "category",
-            "likes_count", "comments_count", "saves_count",
+            "visibility", "allow_reshare", "allow_share_to_story",
+            "likes_count", "comments_count", "saves_count", "reshares_count",
             "is_liked", "is_saved", "comments", "created_at",
         ]
         read_only_fields = ["id", "author", "created_at"]

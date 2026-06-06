@@ -30,6 +30,10 @@ class UserSerializer(serializers.ModelSerializer):
     following_count = serializers.IntegerField(read_only=True)
     is_following = serializers.SerializerMethodField()
     has_requested = serializers.SerializerMethodField()
+    posts_count = serializers.SerializerMethodField()
+
+    def get_posts_count(self, obj):
+        return obj.posts.count()
 
     class Meta:
         model = User
@@ -45,6 +49,7 @@ class UserSerializer(serializers.ModelSerializer):
             "interests", "looking_for", "career_goals", "bio", "linkedin",
             "github", "portfolio", "is_verified", "badge", "is_onboarded",
             "followers_count", "following_count", "is_private",
+            "allow_messages_from", "allow_story_sharing", "allow_post_reshare", "posts_count",
             "is_following", "has_requested",
             "streak_count", "longest_streak",
         ]

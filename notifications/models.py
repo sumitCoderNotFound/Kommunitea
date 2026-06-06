@@ -30,6 +30,8 @@ class Notification(models.Model):
     story_id = models.CharField(max_length=64, blank=True)
     user_id = models.CharField(max_length=64, blank=True)
     job_id = models.CharField(max_length=64, blank=True)
+    community_id = models.CharField(max_length=64, blank=True)
+    reshare_id = models.CharField(max_length=64, blank=True)
     event_id = models.CharField(max_length=64, blank=True)
     referral_id = models.CharField(max_length=64, blank=True)
     is_read = models.BooleanField(default=False)
@@ -44,7 +46,7 @@ class Notification(models.Model):
         if recipient == actor and verb != cls.Verb.STREAK:
             return None
         allowed = {"conversation_id", "target_type", "target_id", "story_id",
-                   "user_id", "job_id", "event_id", "referral_id"}
+                   "user_id", "job_id", "event_id", "referral_id", "community_id", "reshare_id"}
         extra = {k: str(v) for k, v in targets.items() if k in allowed and v is not None}
         return cls.objects.create(recipient=recipient, actor=actor, verb=verb,
                                   text=text, post_id=post_id, **extra)

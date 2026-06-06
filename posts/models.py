@@ -19,6 +19,17 @@ class Post(models.Model):
     body = models.TextField()
     image = models.ImageField(upload_to="posts/", blank=True, null=True)
     category = models.CharField(max_length=30, choices=Category.choices, default=Category.UNIVERSITY_LIFE)
+
+    class Visibility(models.TextChoices):
+        PUBLIC = "public", "Public"
+        FOLLOWERS_ONLY = "followers_only", "Followers only"
+        COMMUNITY_ONLY = "community_only", "Community only"
+        PRIVATE = "private", "Private"
+
+    visibility = models.CharField(max_length=16, choices=Visibility.choices, default=Visibility.PUBLIC)
+    allow_reshare = models.BooleanField(default=True)
+    allow_share_to_story = models.BooleanField(default=True)
+    tags = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="tagged_posts", blank=True)
     liked_by = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="liked_posts", blank=True)
     saved_by = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="saved_posts", blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -28,6 +39,34 @@ class Post(models.Model):
 
     def __str__(self):
         return f"{self.author.full_name}: {self.body[:40]}"
+
+    def visible_to(self, user):
+        """Privacy gate for a post."""
+        if self.visibility == self.Visibility.PUBLIC:
+            return True
+        if user and user.is_authenticated:
+            if user == self.author:
+                return True
+            if self.visibility == self.Visibility.FOLLOWERS_ONLY:
+                return self.author.followers.filter(pk=user.pk).exists()
+        return False
+
+
+class PostReshare(models.Model):
+    """A repost of an existing post, optionally with a comment."""
+    original_post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="reshares")
+    reshared_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reshares")
+    comment_text = models.TextField(blank=True)
+    visibility = models.CharField(max_length=16, default="public")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        unique_together = ("original_post", "reshared_by")
+
+    def __str__(self):
+        return f"{self.reshared_by.full_name} reshared {self.original_post_id}"
 
 
 class Comment(models.Model):

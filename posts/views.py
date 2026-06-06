@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from drf_spectacular.utils import extend_schema
-from .models import Post, Comment
+from .models import Post, Comment, PostReshare
 from .serializers import PostSerializer, CommentSerializer
 from notifications.models import Notification
 
@@ -66,6 +66,32 @@ class PostViewSet(viewsets.ModelViewSet):
         else:
             post.saved_by.add(request.user)
         return Response(self.get_serializer(post).data)
+
+    @action(detail=True, methods=["post"])
+    def reshare(self, request, pk=None):
+        """Repost a post, optionally with a comment. Respects the author's reshare + privacy rules."""
+        post = self.get_object()
+        if not post.allow_reshare or post.visibility in (Post.Visibility.PRIVATE, Post.Visibility.FOLLOWERS_ONLY, Post.Visibility.COMMUNITY_ONLY):
+            if post.visibility != Post.Visibility.PUBLIC or not post.allow_reshare:
+                return Response({"detail": "This post can't be reshared."}, status=status.HTTP_403_FORBIDDEN)
+        reshare, created = PostReshare.objects.get_or_create(
+            original_post=post, reshared_by=request.user,
+            defaults={"comment_text": request.data.get("commentText", "") or request.data.get("comment_text", "")},
+        )
+        if not created:
+            reshare.comment_text = request.data.get("commentText", reshare.comment_text)
+            reshare.save()
+        Notification.push(post.author, request.user, Notification.Verb.LIKE,
+                          text="reshared your post", post_id=post.id, target_type="reshare", target_id=str(reshare.id))
+        return Response(self.get_serializer(post).data)
+
+    @action(detail=False, methods=["get"], url_path="reshares")
+    def reshares(self, request):
+        """Posts reshared by a given user (?user=<id>) — powers the profile Reshares tab."""
+        user_id = request.query_params.get("user")
+        qs = PostReshare.objects.filter(reshared_by_id=user_id) if user_id else PostReshare.objects.none()
+        posts = [r.original_post for r in qs.select_related("original_post")]
+        return Response(self.get_serializer(posts, many=True).data)
 
     @action(detail=True, methods=["post"], url_path="comments")
     def comments(self, request, pk=None):

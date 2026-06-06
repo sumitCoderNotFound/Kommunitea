@@ -135,6 +135,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
             doc = request.FILES.get("file")
             lat = request.data.get("lat")
             lng = request.data.get("lng")
+            shared_id = (request.data.get("sharedId") or request.data.get("shared_id") or "")
+            shared_payload = request.data.get("sharedPayload") or request.data.get("shared_payload")
+            shared_kinds = ("shared_post", "shared_profile", "shared_job", "shared_community")
 
             if kind not in dict(Message.Kind.choices):
                 kind = "text"
@@ -148,7 +151,8 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 kind = Message.Kind.LOCATION
 
             has_location = (lat not in (None, "")) and (lng not in (None, ""))
-            if not body and not image and not gif_url and not doc and not has_location:
+            is_shared = kind in shared_kinds
+            if not body and not image and not gif_url and not doc and not has_location and not is_shared:
                 return Response({"detail": "Empty message."}, status=status.HTTP_400_BAD_REQUEST)
 
             msg = Message.objects.create(
@@ -157,6 +161,8 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 file_name=(getattr(doc, "name", "") or "")[:200] if doc else "",
                 gif_url=gif_url,
                 lat=float(lat) if has_location else None, lng=float(lng) if has_location else None,
+                shared_id=str(shared_id) if is_shared else "",
+                shared_payload=shared_payload if is_shared else None,
             )
             convo.save()  # bump updated_at
 
