@@ -11,7 +11,7 @@ from drf_spectacular.views import (
 from accounts.views import RegisterView, LoginView, MeView, ProfileViewSet, StreakView, SkillSuggestView, MyDataExportView, DeleteAccountView
 from posts.views import PostViewSet, StoryViewSet
 from messaging.views import ConversationViewSet
-from notifications.views import NotificationViewSet
+from notifications.views import NotificationViewSet, RunRemindersView
 from moderation.views import ReportViewSet, BlockViewSet
 from community.views import MemberViewSet, CommunityViewSet, ProjectViewSet
 from jobs.views import JobViewSet, SponsorCompanyViewSet
@@ -60,6 +60,7 @@ urlpatterns = [
     path("api/skills/suggest/", SkillSuggestView.as_view(), name="skill-suggest"),
     # API
     path("api/career-tools/sponsorship-jobs/", JobViewSet.as_view({"get": "list"}), name="sponsorship-jobs"),
+    path("api/cron/run-reminders/", RunRemindersView.as_view(), name="run-reminders"),
     path("api/", include(router.urls)),
     # Swagger
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),

@@ -17,6 +17,7 @@ class Notification(models.Model):
         STREAK = "streak", "reached a streak milestone"
         MESSAGE_REACTION = "message_reaction", "reacted to your message"
         VIEW_ONCE_OPENED = "view_once_opened", "opened your photo"
+        REMINDER = "reminder", "reminder"
 
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
@@ -53,3 +54,47 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"{self.actor.full_name} {self.get_verb_display()}"
+
+    @classmethod
+    def remind(cls, user, text, **targets):
+        """A self-directed reminder notification (e.g. follow-up due, interview tomorrow)."""
+        allowed = {"conversation_id", "target_type", "target_id", "story_id",
+                   "user_id", "job_id", "event_id", "referral_id", "community_id", "reshare_id", "post_id"}
+        extra = {k: str(v) for k, v in targets.items() if k in allowed and v is not None}
+        post_id = targets.get("post_id")
+        if "post_id" in extra:
+            extra.pop("post_id")
+        return cls.objects.create(recipient=user, actor=user, verb=cls.Verb.REMINDER,
+                                  text=text, post_id=post_id, **extra)
+
+
+class Reminder(models.Model):
+    """A scheduled reminder. A daily cron turns due reminders into notifications."""
+    class Kind(models.TextChoices):
+        REFERRAL_FOLLOW_UP = "referral_follow_up", "Referral follow-up"
+        APPLICATION_FOLLOW_UP = "application_follow_up", "Application follow-up"
+        INTERVIEW = "interview", "Interview reminder"
+        CUSTOM = "custom", "Custom"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reminders")
+    kind = models.CharField(max_length=24, choices=Kind.choices, default=Kind.CUSTOM)
+    text = models.CharField(max_length=255)
+    due_at = models.DateTimeField()
+    fired = models.BooleanField(default=False)
+    # navigation targets carried into the notification when fired
+    target_type = models.CharField(max_length=24, blank=True)
+    referral_id = models.CharField(max_length=64, blank=True)
+    job_id = models.CharField(max_length=64, blank=True)
+    target_id = models.CharField(max_length=64, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["due_at"]
+
+    def fire(self):
+        from .models import Notification
+        Notification.remind(self.user, self.text, target_type=self.target_type or None,
+                            referral_id=self.referral_id or None, job_id=self.job_id or None,
+                            target_id=self.target_id or None)
+        self.fired = True
+        self.save(update_fields=["fired"])

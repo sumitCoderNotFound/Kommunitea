@@ -32,3 +32,26 @@ class NotificationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
             n.is_read = True
             n.save(update_fields=["is_read"])
         return Response({"detail": "Marked read."})
+
+
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
+from django.utils import timezone
+from django.conf import settings as dj_settings
+from .models import Reminder
+
+
+class RunRemindersView(APIView):
+    """Cron endpoint: fire all due reminders into notifications.
+    Protected by the X-Cron-Secret header matching CRON_SECRET."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        secret = getattr(dj_settings, "CRON_SECRET", None)
+        if secret and request.headers.get("X-Cron-Secret") != secret:
+            return Response({"detail": "Forbidden."}, status=403)
+        due = Reminder.objects.filter(fired=False, due_at__lte=timezone.now())[:500]
+        fired = 0
+        for r in due:
+            r.fire(); fired += 1
+        return Response({"fired": fired})

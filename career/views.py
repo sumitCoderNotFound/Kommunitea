@@ -49,6 +49,9 @@ class CVAnalysisViewSet(viewsets.ModelViewSet):
         report = CVAnalysis.objects.create(
             user=request.user, file_name=file_name, extracted_text=text[:20000], **result)
         # privacy: we do not persist the uploaded file (auto-delete after analysis)
+        from notifications.models import Notification
+        Notification.remind(request.user, f"Your CV review is ready - ATS score {report.ats_score}/100",
+                            target_type="cv", target_id=str(report.id))
         return Response(CVAnalysisSerializer(report).data, status=status.HTTP_201_CREATED)
 
 
@@ -62,7 +65,23 @@ class ReferralRequestViewSet(viewsets.ModelViewSet):
         return ReferralRequest.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        ref = serializer.save(user=self.request.user)
+        self._sync_reminder(ref)
+
+    def perform_update(self, serializer):
+        ref = serializer.save()
+        self._sync_reminder(ref)
+
+    def _sync_reminder(self, ref):
+        from datetime import datetime, time
+        from django.utils import timezone
+        from notifications.models import Reminder
+        Reminder.objects.filter(kind="referral_follow_up", referral_id=str(ref.id), fired=False).delete()
+        if ref.follow_up_date and ref.status in ("requested", "follow_up"):
+            due = timezone.make_aware(datetime.combine(ref.follow_up_date, time(9, 0)))
+            Reminder.objects.create(user=ref.user, kind="referral_follow_up",
+                                    text=f"Follow up on your referral to {ref.company}",
+                                    due_at=due, target_type="referral", referral_id=str(ref.id))
 
 
 @extend_schema(tags=["Career"])
@@ -77,7 +96,22 @@ class InterviewPrepViewSet(viewsets.ModelViewSet):
         # seed default checklist + common questions if none provided
         checklist = serializer.validated_data.get("checklist") or [{"item": i, "done": False} for i in DEFAULT_CHECKLIST]
         questions = serializer.validated_data.get("questions") or COMMON_QUESTIONS
-        serializer.save(user=self.request.user, checklist=checklist, questions=questions)
+        prep = serializer.save(user=self.request.user, checklist=checklist, questions=questions)
+        self._sync_reminder(prep)
+
+    def perform_update(self, serializer):
+        prep = serializer.save()
+        self._sync_reminder(prep)
+
+    def _sync_reminder(self, prep):
+        from datetime import timedelta
+        from notifications.models import Reminder
+        Reminder.objects.filter(kind="interview", target_id=str(prep.id), fired=False).delete()
+        if prep.interview_date:
+            due = prep.interview_date - timedelta(days=1)
+            Reminder.objects.create(user=prep.user, kind="interview",
+                                    text=f"Interview tomorrow: {prep.role_title or 'role'} at {prep.company}",
+                                    due_at=due, target_type="interview_prep", target_id=str(prep.id))
 
     @action(detail=True, methods=["post"], url_path="complete-checklist-item")
     def complete_item(self, request, pk=None):
