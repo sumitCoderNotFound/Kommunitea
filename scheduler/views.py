@@ -72,6 +72,7 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
             obj.applied_date = timezone.localdate()
             obj.save(update_fields=["applied_date"])
         self._sync_goal(obj.goal)
+        self._sync_reminder(obj)
 
     def perform_update(self, serializer):
         obj = serializer.save()
@@ -79,6 +80,19 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
             obj.applied_date = timezone.localdate()
             obj.save(update_fields=["applied_date"])
         self._sync_goal(obj.goal)
+        self._sync_reminder(obj)
+
+    def _sync_reminder(self, app):
+        """Create/refresh a follow-up reminder for this application."""
+        from datetime import datetime, time
+        from django.utils import timezone as tz
+        from notifications.models import Reminder
+        Reminder.objects.filter(kind="application_follow_up", target_id=str(app.id), fired=False).delete()
+        if app.follow_up_date and app.status not in (JobApplication.Status.REJECTED, JobApplication.Status.OFFER):
+            due = tz.make_aware(datetime.combine(app.follow_up_date, time(9, 0)))
+            Reminder.objects.create(user=app.user, kind="application_follow_up",
+                                    text=f"Follow up on your {app.role_title or 'application'} at {app.company}",
+                                    due_at=due, target_type="application", target_id=str(app.id))
 
     @action(detail=True, methods=["post"], url_path="status")
     def set_status(self, request, pk=None):
