@@ -19,6 +19,7 @@ class Post(models.Model):
     body = models.TextField()
     image = models.ImageField(upload_to="posts/", blank=True, null=True)
     category = models.CharField(max_length=30, choices=Category.choices, default=Category.UNIVERSITY_LIFE)
+    community = models.ForeignKey("community.Community", on_delete=models.SET_NULL, null=True, blank=True, related_name="posts")
 
     class Visibility(models.TextChoices):
         PUBLIC = "public", "Public"
@@ -91,7 +92,9 @@ class Story(models.Model):
         PRIVATE = "private", "Private"
 
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="stories")
-    image = models.ImageField(upload_to="stories/")
+    image = models.ImageField(upload_to="stories/", blank=True, null=True)
+    story_type = models.CharField(max_length=16, default="image")  # image | video | text | shared_post
+    original_post = models.ForeignKey("Post", on_delete=models.SET_NULL, null=True, blank=True, related_name="story_shares")
     caption = models.CharField(max_length=200, blank=True)
     visibility = models.CharField(max_length=20, choices=Visibility.choices, default=Visibility.PUBLIC)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -5,6 +5,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from drf_spectacular.utils import extend_schema
 from .models import Post, Comment, PostReshare
 from .serializers import PostSerializer, CommentSerializer
+from .permissions import can_view_post, visible_posts_filter, can_reshare_post, can_add_post_to_story
 from notifications.models import Notification
 
 
@@ -38,12 +39,20 @@ class PostViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if self.request.query_params.get("mine") == "true" and user.is_authenticated:
             return qs.filter(author=user)
+        # Privacy: only return posts this viewer is allowed to see (enforced at DB level).
+        qs = qs.filter(visible_posts_filter(user))
         if user.is_authenticated:
             # Hide posts from people I blocked or who blocked me
             blocked = user.blocking.values_list("blocked_id", flat=True)
             blocked_by = user.blocked_by.values_list("blocker_id", flat=True)
             qs = qs.exclude(author_id__in=list(blocked) + list(blocked_by))
         return qs
+
+    def retrieve(self, request, *args, **kwargs):
+        post = self.get_object()
+        if not can_view_post(request.user, post):
+            return Response({"detail": "This item is no longer available."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(self.get_serializer(post).data)
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
@@ -71,9 +80,8 @@ class PostViewSet(viewsets.ModelViewSet):
     def reshare(self, request, pk=None):
         """Repost a post, optionally with a comment. Respects the author's reshare + privacy rules."""
         post = self.get_object()
-        if not post.allow_reshare or post.visibility in (Post.Visibility.PRIVATE, Post.Visibility.FOLLOWERS_ONLY, Post.Visibility.COMMUNITY_ONLY):
-            if post.visibility != Post.Visibility.PUBLIC or not post.allow_reshare:
-                return Response({"detail": "This post can't be reshared."}, status=status.HTTP_403_FORBIDDEN)
+        if not can_reshare_post(request.user, post):
+            return Response({"detail": "This post can't be reshared."}, status=status.HTTP_403_FORBIDDEN)
         reshare, created = PostReshare.objects.get_or_create(
             original_post=post, reshared_by=request.user,
             defaults={"comment_text": request.data.get("commentText", "") or request.data.get("comment_text", "")},
@@ -85,13 +93,77 @@ class PostViewSet(viewsets.ModelViewSet):
                           text="reshared your post", post_id=post.id, target_type="reshare", target_id=str(reshare.id))
         return Response(self.get_serializer(post).data)
 
+    @action(detail=True, methods=["post"], url_path="unreshare")
+    def unreshare(self, request, pk=None):
+        """Undo a repost."""
+        PostReshare.objects.filter(original_post_id=pk, reshared_by=request.user).delete()
+        post = self.get_object()
+        return Response(self.get_serializer(post).data)
+
+    @action(detail=False, methods=["get"], url_path="feed")
+    def feed(self, request):
+        """Home feed: your visible posts + posts reposted by people you follow, with attribution."""
+        user = request.user
+        base = self.get_queryset().filter(visible_posts_filter(user))[:60]
+        reshared_map = {}
+        items = list(base)
+        if user.is_authenticated:
+            following_ids = list(user.following.values_list("id", flat=True))
+            reshares = (PostReshare.objects
+                        .filter(reshared_by_id__in=following_ids)
+                        .select_related("original_post", "reshared_by")
+                        .order_by("-created_at")[:40])
+            seen = {p.id for p in items}
+            for r in reshares:
+                op = r.original_post
+                if not op or not can_view_post(user, op):
+                    continue
+                reshared_map.setdefault(op.id, {"names": [], "comment": ""})
+                name = r.reshared_by.full_name.split(" ")[0]
+                if name not in reshared_map[op.id]["names"]:
+                    reshared_map[op.id]["names"].append(name)
+                if r.comment_text and not reshared_map[op.id]["comment"]:
+                    reshared_map[op.id]["comment"] = r.comment_text
+                if op.id not in seen:
+                    items.append(op); seen.add(op.id)
+        items.sort(key=lambda p: p.created_at, reverse=True)
+        ser = self.get_serializer(items, many=True, context={"request": request, "reshared_map": reshared_map})
+        return Response(ser.data)
+
     @action(detail=False, methods=["get"], url_path="reshares")
     def reshares(self, request):
         """Posts reshared by a given user (?user=<id>) — powers the profile Reshares tab."""
         user_id = request.query_params.get("user")
         qs = PostReshare.objects.filter(reshared_by_id=user_id) if user_id else PostReshare.objects.none()
         posts = [r.original_post for r in qs.select_related("original_post")]
+        posts = [p for p in posts if can_view_post(request.user, p)]  # privacy gate
         return Response(self.get_serializer(posts, many=True).data)
+
+    @action(detail=False, methods=["get"], url_path="tagged")
+    def tagged(self, request):
+        """Posts a given user is tagged in (?user=<id>), respecting privacy."""
+        user_id = request.query_params.get("user")
+        qs = Post.objects.filter(tags__id=user_id) if user_id else Post.objects.none()
+        qs = qs.filter(visible_posts_filter(request.user))
+        return Response(self.get_serializer(qs, many=True).data)
+
+    @action(detail=True, methods=["post"], url_path="add-to-story")
+    def add_to_story(self, request, pk=None):
+        """Add a public post to the current user's story (24h). Blocked for non-public posts."""
+        from .models import Story
+        from django.utils import timezone
+        from datetime import timedelta
+        post = self.get_object()
+        if not can_add_post_to_story(request.user, post):
+            return Response({"detail": "This post cannot be shared to story."}, status=status.HTTP_403_FORBIDDEN)
+        story = Story.objects.create(
+            author=request.user, story_type="shared_post", original_post=post,
+            caption=request.data.get("caption", ""), visibility="public",
+            expires_at=timezone.now() + timedelta(hours=24),
+        )
+        Notification.push(post.author, request.user, Notification.Verb.LIKE,
+                          text="added your post to their story", post_id=post.id, story_id=str(story.id))
+        return Response({"detail": "Added to your story.", "storyId": story.id}, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], url_path="comments")
     def comments(self, request, pk=None):

@@ -29,6 +29,18 @@ class UserSerializer(serializers.ModelSerializer):
     followers_count = serializers.IntegerField(read_only=True)
     following_count = serializers.IntegerField(read_only=True)
     is_following = serializers.SerializerMethodField()
+    mutual_followers = serializers.SerializerMethodField()
+
+    def get_mutual_followers(self, obj):
+        """People the viewer follows who also follow this profile (up to 3 names + total)."""
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated or request.user.pk == obj.pk:
+            return {"names": [], "count": 0}
+        mine = set(request.user.following.values_list("id", flat=True))
+        theirs = obj.followers.filter(pk__in=mine)[:10]
+        names = [u.full_name.split(" ")[0] for u in theirs]
+        total = obj.followers.filter(pk__in=mine).count()
+        return {"names": names[:3], "count": total}
     has_requested = serializers.SerializerMethodField()
     posts_count = serializers.SerializerMethodField()
 
@@ -50,7 +62,7 @@ class UserSerializer(serializers.ModelSerializer):
             "github", "portfolio", "is_verified", "badge", "is_onboarded",
             "followers_count", "following_count", "is_private",
             "allow_messages_from", "allow_story_sharing", "allow_post_reshare", "posts_count",
-            "is_following", "has_requested",
+            "is_following", "has_requested", "mutual_followers",
             "streak_count", "longest_streak",
         ]
         read_only_fields = ["id", "email", "is_verified", "badge",

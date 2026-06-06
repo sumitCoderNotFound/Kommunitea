@@ -42,11 +42,22 @@ class PostSerializer(serializers.ModelSerializer):
     is_liked = serializers.SerializerMethodField()
     is_saved = serializers.SerializerMethodField()
     reshares_count = serializers.SerializerMethodField()
+    is_reshared = serializers.SerializerMethodField()
+    reshared_by = serializers.SerializerMethodField()
     comments = CommentSerializer(many=True, read_only=True)
     image = serializers.ImageField(write_only=True, required=False)
 
     def get_reshares_count(self, obj):
         return obj.reshares.count()
+
+    def get_is_reshared(self, obj):
+        u = self._user()
+        return bool(u and obj.reshares.filter(reshared_by=u).exists())
+
+    def get_reshared_by(self, obj):
+        # Populated by the feed action: {post_id: {"names": [...], "comment": str}}
+        m = self.context.get("reshared_map") or {}
+        return m.get(obj.id)
 
     class Meta:
         model = Post
@@ -54,7 +65,7 @@ class PostSerializer(serializers.ModelSerializer):
             "id", "author", "body", "image", "image_url", "category",
             "visibility", "allow_reshare", "allow_share_to_story",
             "likes_count", "comments_count", "saves_count", "reshares_count",
-            "is_liked", "is_saved", "comments", "created_at",
+            "is_liked", "is_saved", "is_reshared", "reshared_by", "comments", "created_at",
         ]
         read_only_fields = ["id", "author", "created_at"]
 
