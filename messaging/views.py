@@ -91,6 +91,37 @@ class ConversationViewSet(viewsets.ModelViewSet):
         convo.save()
         return Response({"detail": "Accepted."})
 
+    @action(detail=True, methods=["get"], url_path="members")
+    def members(self, request, pk=None):
+        """Group info: list participants."""
+        from accounts.serializers import UserSerializer
+        convo = request.user.conversations.filter(pk=pk).first()
+        if not convo:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(UserSerializer(convo.participants.all(), many=True, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="leave")
+    def leave(self, request, pk=None):
+        """Leave a group/community chat."""
+        convo = request.user.conversations.filter(pk=pk).first()
+        if not convo:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        convo.participants.remove(request.user)
+        convo.muted_by.remove(request.user)
+        return Response({"detail": "Left the group."})
+
+    @action(detail=True, methods=["post"], url_path="mute")
+    def mute(self, request, pk=None):
+        """Toggle mute for this conversation (per-user)."""
+        convo = request.user.conversations.filter(pk=pk).first()
+        if not convo:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        if convo.muted_by.filter(pk=request.user.pk).exists():
+            convo.muted_by.remove(request.user); muted = False
+        else:
+            convo.muted_by.add(request.user); muted = True
+        return Response({"muted": muted})
+
     @action(detail=True, methods=["post"])
     def decline(self, request, pk=None):
         """Decline a message request: remove the receiver from the conversation."""

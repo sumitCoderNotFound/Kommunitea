@@ -84,3 +84,20 @@ class ProjectSerializer(serializers.ModelSerializer):
     def get_is_owner(self, obj):
         req = self.context.get("request")
         return bool(req and obj.owner_id == req.user.pk)
+
+
+from .models import CommunityEvent, CommunityResource
+
+
+class CommunityEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CommunityEvent
+        fields = ["id", "community", "title", "description", "location", "starts_at", "link", "created_at"]
+        read_only_fields = ["id", "community", "created_at"]
+
+
+class CommunityResourceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CommunityResource
+        fields = ["id", "community", "title", "kind", "url", "description", "created_at"]
+        read_only_fields = ["id", "community", "created_at"]

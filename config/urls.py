@@ -15,6 +15,8 @@ from notifications.views import NotificationViewSet
 from moderation.views import ReportViewSet, BlockViewSet
 from community.views import MemberViewSet, CommunityViewSet, ProjectViewSet
 from jobs.views import JobViewSet, SponsorCompanyViewSet
+from career.views import CVAnalysisViewSet, ReferralRequestViewSet, InterviewPrepViewSet
+from accounts.career_views import FavouriteViewSet, HighlightViewSet
 from team.views import TeamMemberViewSet
 from scheduler.views import TaskViewSet, WeeklyGoalViewSet, OpportunityListView, SchedulerOverviewView, JobApplicationViewSet
 
@@ -31,6 +33,11 @@ router.register(r"communities", CommunityViewSet, basename="community")
 router.register(r"projects", ProjectViewSet, basename="project")
 router.register(r"jobs", JobViewSet, basename="job")
 router.register(r"career-tools/sponsor-companies", SponsorCompanyViewSet, basename="sponsor-company")
+router.register(r"cv", CVAnalysisViewSet, basename="cv")
+router.register(r"referrals", ReferralRequestViewSet, basename="referral")
+router.register(r"interview-prep", InterviewPrepViewSet, basename="interview-prep")
+router.register(r"favourites", FavouriteViewSet, basename="favourite")
+router.register(r"highlights", HighlightViewSet, basename="highlight")
 router.register(r"team", TeamMemberViewSet, basename="team")
 router.register(r"scheduler/tasks", TaskViewSet, basename="task")
 router.register(r"scheduler/goals", WeeklyGoalViewSet, basename="weeklygoal")

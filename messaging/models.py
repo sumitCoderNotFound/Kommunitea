@@ -21,6 +21,7 @@ class Conversation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     is_request = models.BooleanField(default=False)  # pending message request
     community = models.ForeignKey("community.Community", on_delete=models.CASCADE, null=True, blank=True, related_name="conversations")
+    muted_by = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="muted_conversations", blank=True)
     initiator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
                                   null=True, blank=True, related_name="initiated_conversations")
 

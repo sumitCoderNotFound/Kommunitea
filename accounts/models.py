@@ -203,3 +203,33 @@ class ActivityDay(models.Model):
 
     def __str__(self):
         return f"{self.user_id} {self.date} ({self.count})"
+
+
+class Favourite(models.Model):
+    """A user's favourite person / community / post (for the Home 'Favourites' feed)."""
+    class Kind(models.TextChoices):
+        PERSON = "person", "Person"
+        COMMUNITY = "community", "Community"
+        POST = "post", "Post"
+
+    user = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="favourites")
+    kind = models.CharField(max_length=12, choices=Kind.choices)
+    target_id = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "kind", "target_id")
+        ordering = ["-created_at"]
+
+
+class Highlight(models.Model):
+    """A profile highlight (e.g. UK Life / Jobs / Visa) - a labelled circle on the profile."""
+    user = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="highlights")
+    title = models.CharField(max_length=40)
+    icon = models.CharField(max_length=40, blank=True)   # ionicon name
+    cover_url = models.URLField(blank=True)
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["order", "created_at"]

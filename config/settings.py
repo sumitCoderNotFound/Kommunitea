@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     "jobs",
     "team",
     "scheduler",
+    "career",
 ]
 
 MIDDLEWARE = [

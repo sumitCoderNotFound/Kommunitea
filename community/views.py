@@ -145,6 +145,36 @@ class CommunityViewSet(viewsets.ModelViewSet):
         users = community.members.all()[:200]
         return Response(UserSerializer(users, many=True, context={"request": request}).data)
 
+    @action(detail=True, methods=["get", "post"], url_path="events")
+    def events(self, request, pk=None):
+        """List community events, or create one (members only)."""
+        from .models import CommunityEvent
+        from .serializers import CommunityEventSerializer
+        community = self.get_object()
+        if request.method == "GET":
+            return Response(CommunityEventSerializer(community.events.all(), many=True).data)
+        if not community.members.filter(pk=request.user.pk).exists():
+            return Response({"detail": "Join this community to add events."}, status=status.HTTP_403_FORBIDDEN)
+        ser = CommunityEventSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        ev = ser.save(community=community, created_by=request.user)
+        return Response(CommunityEventSerializer(ev).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get", "post"], url_path="resources")
+    def resources(self, request, pk=None):
+        """List community resources, or create one (members only)."""
+        from .models import CommunityResource
+        from .serializers import CommunityResourceSerializer
+        community = self.get_object()
+        if request.method == "GET":
+            return Response(CommunityResourceSerializer(community.resources.all(), many=True).data)
+        if not community.members.filter(pk=request.user.pk).exists():
+            return Response({"detail": "Join this community to add resources."}, status=status.HTTP_403_FORBIDDEN)
+        ser = CommunityResourceSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        res = ser.save(community=community, created_by=request.user)
+        return Response(CommunityResourceSerializer(res).data, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=["post"])
     def chat(self, request, pk=None):
         """Get or create the community group chat (members only)."""

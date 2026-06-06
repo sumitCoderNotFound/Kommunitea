@@ -134,3 +134,38 @@ class ProjectScreenshot(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+
+
+class CommunityEvent(models.Model):
+    """A meetup / workshop / networking event linked to a community."""
+    community = models.ForeignKey("community.Community", on_delete=models.CASCADE, related_name="events")
+    title = models.CharField(max_length=160)
+    description = models.TextField(blank=True)
+    location = models.CharField(max_length=160, blank=True)
+    starts_at = models.DateTimeField(null=True, blank=True)
+    link = models.URLField(blank=True)
+    created_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="created_events")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["starts_at", "-created_at"]
+
+
+class CommunityResource(models.Model):
+    """A useful link / referral / visa / accommodation resource shared in a community."""
+    class Kind(models.TextChoices):
+        LINK = "link", "Useful link"
+        JOB = "job", "Job / referral"
+        VISA = "visa", "Visa"
+        ACCOMMODATION = "accommodation", "Accommodation"
+
+    community = models.ForeignKey("community.Community", on_delete=models.CASCADE, related_name="resources")
+    title = models.CharField(max_length=160)
+    kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.LINK)
+    url = models.URLField(blank=True)
+    description = models.TextField(blank=True)
+    created_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="created_resources")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
