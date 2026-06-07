@@ -1,4 +1,5 @@
 from rest_framework import mixins, viewsets, permissions, status
+from accounts.permissions import IsEmailVerified
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
@@ -47,6 +48,8 @@ class CommunityViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ("list", "retrieve"):
             return [permissions.AllowAny()]
+        if self.action == "create":
+            return [permissions.IsAuthenticated(), IsEmailVerified()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):

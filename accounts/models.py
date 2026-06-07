@@ -51,11 +51,31 @@ class User(AbstractUser):
         CREATOR = "creator", "Creator"
         NEWCOMER = "newcomer", "New to UK"
 
-    username = None  # remove username; use email
     email = models.EmailField(unique=True)
+    # Public handle (separate from email). Nullable so existing users + new
+    # Google users without a chosen handle remain valid.
+    username = models.CharField(max_length=30, unique=True, null=True, blank=True, db_index=True)
     is_email_verified = models.BooleanField(default=False)
 
+    class AuthProvider(models.TextChoices):
+        EMAIL = "email", "Email"
+        GOOGLE = "google", "Google"
+        BOTH = "both", "Both"
+
+    auth_provider = models.CharField(max_length=10, choices=AuthProvider.choices, default=AuthProvider.EMAIL)
+    google_id = models.CharField(max_length=64, blank=True, db_index=True)
+
     full_name = models.CharField(max_length=120)
+    display_name = models.CharField(max_length=120, blank=True)
+
+    # Optional phone / WhatsApp (never required at signup)
+    phone_country_code = models.CharField(max_length=6, blank=True)   # e.g. +44
+    phone_number = models.CharField(max_length=20, blank=True)
+    is_phone_verified = models.BooleanField(default=False)
+    whatsapp_opt_in = models.BooleanField(default=False)
+    whatsapp_opt_in_at = models.DateTimeField(null=True, blank=True)
+    whatsapp_opt_out_at = models.DateTimeField(null=True, blank=True)
+
     avatar = models.ImageField(upload_to="avatars/", blank=True, null=True)
     cover_image = models.ImageField(upload_to="covers/", blank=True, null=True)
     user_type = models.CharField(max_length=20, choices=UserType.choices, default=UserType.STUDENT)
@@ -133,6 +153,21 @@ class User(AbstractUser):
 
     def __str__(self):
         return f"{self.full_name} <{self.email}>"
+
+    @property
+    def profile_completion(self) -> int:
+        """Rough completeness score (0-100) used by the profile completion card."""
+        checks = [
+            bool(self.avatar),
+            bool(self.bio),
+            bool(self.city or self.university or self.company),
+            bool(self.skills),
+            bool(self.phone_number),
+            bool(self.is_email_verified),
+            bool(self.career_goals or self.target_role),
+            bool(self.username),
+        ]
+        return round(100 * sum(checks) / len(checks))
 
     @property
     def followers_count(self):
@@ -298,6 +333,10 @@ class SecurityEvent(models.Model):
         GOOGLE_LOGIN_SUCCESS = "google_login_success", "Google login success"
         GOOGLE_LOGIN_FAILED = "google_login_failed", "Google login failed"
         RATE_LIMITED = "rate_limited", "Rate limited"
+        PHONE_ADDED = "phone_added", "Phone number added"
+        WHATSAPP_CHANGED = "whatsapp_changed", "WhatsApp opt-in changed"
+        USERNAME_CHANGED = "username_changed", "Username changed"
+        PASSWORD_CHANGED = "password_changed", "Password changed"
 
     user = models.ForeignKey(dj_settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="security_events")
     email = models.EmailField(blank=True)

@@ -70,7 +70,7 @@ class LoginView(TokenObtainPairView):
             serializer.is_valid(raise_exception=True)
         except Exception:
             log_security_event(SecurityEvent.Type.LOGIN_FAILED, request=request, email=email, success=False)
-            return Response({"detail": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({"detail": "Invalid email/username or password."}, status=status.HTTP_401_UNAUTHORIZED)
         user = getattr(serializer, "user", None)
         log_security_event(SecurityEvent.Type.LOGIN_SUCCESS, request=request, user=user, email=email)
         return Response(serializer.validated_data, status=status.HTTP_200_OK)
@@ -199,15 +199,25 @@ class GoogleLoginView(APIView):
                 full_name=info.get("name", "") or email.split("@")[0],
             )
             user.set_unusable_password()
+            user.auth_provider = User.AuthProvider.GOOGLE
             created = True
+        else:
+            # Existing email account now also linked to Google.
+            if user.auth_provider == User.AuthProvider.EMAIL:
+                user.auth_provider = User.AuthProvider.BOTH
+        if not user.google_id:
+            user.google_id = str(info.get("sub", ""))
         if info.get("email_verified") and not user.is_email_verified:
             user.is_email_verified = True
-        if created or info.get("email_verified"):
-            user.save()
+        user.save()
 
         refresh = RefreshToken.for_user(user)
         log_security_event(SecurityEvent.Type.GOOGLE_LOGIN_SUCCESS, request=request, user=user, created=created)
-        return Response({"access": str(refresh.access_token), "refresh": str(refresh)})
+        return Response({
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "needsUsername": not bool(user.username),
+        })
 
 
 class LogoutView(APIView):

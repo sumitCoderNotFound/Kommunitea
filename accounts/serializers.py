@@ -9,14 +9,25 @@ User = get_user_model()
 
 from django.contrib.auth.password_validation import validate_password as dj_validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from .username_utils import normalize_username, username_error, is_available
 
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8, style={"input_type": "password"})
+    username = serializers.CharField(required=True)
 
     class Meta:
         model = User
-        fields = ["id", "full_name", "email", "password"]
+        fields = ["id", "full_name", "username", "email", "password"]
+
+    def validate_username(self, value):
+        v = normalize_username(value)
+        err = username_error(v)
+        if err:
+            raise serializers.ValidationError(err)
+        if not is_available(v):
+            raise serializers.ValidationError("That username is already taken.")
+        return v
 
     def validate_password(self, value):
         # Build a throwaway user so similarity-to-email/name checks work.
@@ -32,6 +43,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             email=validated_data["email"],
             password=validated_data["password"],
             full_name=validated_data["full_name"],
+            username=validated_data["username"],
         )
 
 
@@ -56,6 +68,7 @@ class UserSerializer(serializers.ModelSerializer):
         return {"names": names[:3], "count": total}
     has_requested = serializers.SerializerMethodField()
     posts_count = serializers.SerializerMethodField()
+    profile_completion = serializers.IntegerField(read_only=True)
 
     def get_posts_count(self, obj):
         return obj.posts.count()
@@ -63,7 +76,8 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            "id", "full_name", "email", "avatar_url", "cover_image_url", "user_type",
+            "id", "full_name", "display_name", "username", "email", "is_email_verified",
+            "auth_provider", "avatar_url", "cover_image_url", "user_type",
             "university", "course", "study_level", "graduation_date", "intake_year",
             "student_email", "company", "job_title", "years_experience", "industry",
             "hiring_for", "display_company", "open_to_networking", "open_to_referrals",
@@ -77,8 +91,11 @@ class UserSerializer(serializers.ModelSerializer):
             "allow_messages_from", "allow_story_sharing", "allow_post_reshare", "posts_count",
             "is_following", "has_requested", "mutual_followers",
             "streak_count", "longest_streak",
+            "phone_country_code", "phone_number", "is_phone_verified",
+            "whatsapp_opt_in", "profile_completion",
         ]
-        read_only_fields = ["id", "email", "is_verified", "badge",
+        read_only_fields = ["id", "email", "is_verified", "badge", "is_email_verified",
+                            "auth_provider", "is_phone_verified", "profile_completion",
                             "followers_count", "following_count",
                             "streak_count", "longest_streak"]
 
@@ -111,3 +128,12 @@ class UserSerializer(serializers.ModelSerializer):
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
     username_field = User.USERNAME_FIELD  # email
+
+    def validate(self, attrs):
+        # Accept an email OR a username in the "email" field.
+        identifier = (attrs.get(self.username_field) or "").strip()
+        if identifier and "@" not in identifier:
+            match = User.objects.filter(username=identifier.lower()).first()
+            if match:
+                attrs[self.username_field] = match.email
+        return super().validate(attrs)

@@ -14,6 +14,11 @@ from accounts.auth_views import (
     PasswordResetRequestView, PasswordResetConfirmView, GoogleLoginView,
     LogoutView, LogoutAllView,
 )
+from accounts.account_views import (
+    UsernameCheckView, UsernameUpdateView, ChangePasswordView,
+    PhoneUpdateView, PhoneVerifyRequestView, PhoneVerifyConfirmView, PhoneOtpStatusView,
+    WhatsAppPreferencesView, UserProfileLookupView,
+)
 from posts.views import PostViewSet, StoryViewSet
 from messaging.views import ConversationViewSet
 from notifications.views import NotificationViewSet, RunRemindersView
@@ -52,6 +57,7 @@ router.register(r"external-shares", ExternalShareViewSet, basename="external-sha
 
 urlpatterns = [
     path("api/ai/", include("ai.urls")),
+    path("api/study-match/", include("study_match.urls")),
     path("admin/", admin.site.urls),
     # Auth
     path("api/auth/register/", RegisterView.as_view(), name="register"),
@@ -68,6 +74,19 @@ urlpatterns = [
     path("api/auth/google/", GoogleLoginView.as_view(), name="google-login"),
     path("api/auth/logout/", LogoutView.as_view(), name="logout"),
     path("api/auth/logout-all/", LogoutAllView.as_view(), name="logout-all"),
+    path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh_alias"),
+    # Username + password management
+    path("api/auth/username/check/", UsernameCheckView.as_view(), name="username-check"),
+    path("api/auth/username/", UsernameUpdateView.as_view(), name="username-update"),
+    path("api/auth/change-password/", ChangePasswordView.as_view(), name="change-password"),
+    # Optional phone + WhatsApp
+    path("api/profile/phone/", PhoneUpdateView.as_view(), name="profile-phone"),
+    path("api/profile/phone/otp-status/", PhoneOtpStatusView.as_view(), name="phone-otp-status"),
+    path("api/profile/phone/verify/request/", PhoneVerifyRequestView.as_view(), name="phone-verify-request"),
+    path("api/profile/phone/verify/confirm/", PhoneVerifyConfirmView.as_view(), name="phone-verify-confirm"),
+    path("api/profile/whatsapp-preferences/", WhatsAppPreferencesView.as_view(), name="whatsapp-preferences"),
+    # Public profile by @username or id
+    path("api/users/<str:username_or_id>/profile/", UserProfileLookupView.as_view(), name="user-profile-lookup"),
     path("api/streak/", StreakView.as_view(), name="streak"),
     path("api/streak/touch/", StreakView.as_view(), name="streak-touch"),
     path("api/scheduler/opportunities/", OpportunityListView.as_view(), name="opportunities"),

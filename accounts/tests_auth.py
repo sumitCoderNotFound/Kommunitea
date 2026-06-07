@@ -18,7 +18,7 @@ class RegisterVerifyTests(APITestCase):
 
     def test_register_creates_unverified_user(self):
         r = self.client.post("/api/auth/register/", {
-            "fullName": "Test User", "email": "new@example.com", "password": "Str0ng!Pass99",
+            "fullName": "Test User", "username": "testuser", "email": "new@example.com", "password": "Str0ng!Pass99",
         }, format="json")
         self.assertEqual(r.status_code, status.HTTP_201_CREATED)
         u = User.objects.get(email="new@example.com")
@@ -49,7 +49,7 @@ class RegisterVerifyTests(APITestCase):
     @patch("accounts.security.send_mail", side_effect=Exception("smtp down"))
     def test_email_failure_does_not_crash_signup(self, _m):
         r = self.client.post("/api/auth/register/", {
-            "fullName": "NoMail", "email": "nomail@example.com", "password": "Str0ng!Pass99",
+            "fullName": "NoMail", "username": "nomail", "email": "nomail@example.com", "password": "Str0ng!Pass99",
         }, format="json")
         self.assertEqual(r.status_code, status.HTTP_201_CREATED)
         self.assertTrue(User.objects.filter(email="nomail@example.com").exists())
@@ -90,7 +90,7 @@ class PasswordStrengthTests(APITestCase):
         for pw in ["password", "12345678", "short"]:
             cache.clear()
             r = self.client.post("/api/auth/register/", {
-                "fullName": "Weak", "email": f"w{abs(hash(pw))}@example.com", "password": pw,
+                "fullName": "Weak", "username": f"weak{abs(hash(pw))%100000}", "email": f"w{abs(hash(pw))}@example.com", "password": pw,
             }, format="json")
             self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, pw)
 

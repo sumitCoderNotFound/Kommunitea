@@ -1,4 +1,5 @@
 from rest_framework import viewsets, status
+from accounts.permissions import IsEmailVerified
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -19,6 +20,12 @@ class ExternalShareViewSet(viewsets.ModelViewSet):
     serializer_class = ExternalShareSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ["get", "post", "delete"]
+
+    def get_permissions(self):
+        # Importing content into the app is a "create content" action.
+        if getattr(self, "action", None) == "create":
+            return [IsAuthenticated(), IsEmailVerified()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         return ExternalShare.objects.filter(user=self.request.user)

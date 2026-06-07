@@ -10,7 +10,7 @@ class AuthFlowTests(APITestCase):
     def test_register_login_me(self):
         # Register
         r = self.client.post(reverse("register"), {
-            "fullName": "Faraz Mohammed", "email": "faraz@test.com", "password": "Str0ng!Pass99",
+            "fullName": "Faraz Mohammed", "username": "faraz", "email": "faraz@test.com", "password": "Str0ng!Pass99",
         }, format="json")
         self.assertEqual(r.status_code, status.HTTP_201_CREATED)
 

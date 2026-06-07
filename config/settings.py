@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "scheduler",
     "career",
     "external_shares",
+    "study_match",
 ]
 
 MIDDLEWARE = [
@@ -172,6 +173,7 @@ REST_FRAMEWORK = {
         "google_login": "10/min",
         "cv": "10/hour",
         "share_preview": "20/min",
+        "username_check": "30/min",
     },
 }
 
@@ -250,3 +252,20 @@ REQUIRE_EMAIL_VERIFICATION = config("REQUIRE_EMAIL_VERIFICATION", default=False,
 
 # Google sign-in (POST /api/auth/google/). Empty = feature degrades gracefully.
 GOOGLE_CLIENT_ID = config("GOOGLE_CLIENT_ID", default="")
+
+# --- Optional phone OTP verification ---
+# Provider: "fake" (dev/staging, logs code), "twilio"/"whatsapp" (later), "none" (off).
+# Defaults to "fake" in development and "none" in production so "Send OTP" stays
+# hidden/disabled until a real provider is configured.
+OTP_PROVIDER = config("OTP_PROVIDER", default="fake" if DEBUG else "none")
+TWILIO_ACCOUNT_SID = config("TWILIO_ACCOUNT_SID", default="")
+TWILIO_AUTH_TOKEN = config("TWILIO_AUTH_TOKEN", default="")
+TWILIO_FROM_NUMBER = config("TWILIO_FROM_NUMBER", default="")
+WHATSAPP_PHONE_ID = config("WHATSAPP_PHONE_ID", default="")
+WHATSAPP_TOKEN = config("WHATSAPP_TOKEN", default="")
+
+# --- Study Match (Phase 2 data + Phase 4 AI). All optional; features degrade gracefully. ---
+ADZUNA_APP_ID = config("ADZUNA_APP_ID", default="")
+ADZUNA_APP_KEY = config("ADZUNA_APP_KEY", default="")
+SPONSOR_REGISTER_URL = config("SPONSOR_REGISTER_URL", default="")
+ANTHROPIC_API_KEY = config("ANTHROPIC_API_KEY", default="")
