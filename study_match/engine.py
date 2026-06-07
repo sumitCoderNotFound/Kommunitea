@@ -11,8 +11,17 @@ PRIORITY_LABELS = {
     "strong_job_market": "Strong job market", "post_study_work": "Post-study work route",
     "pr_settlement": "PR/settlement pathway", "part_time_jobs": "Part-time jobs",
     "scholarship_chances": "Scholarship chances", "community": "Indian/student community",
-    "tech_ecosystem": "Tech/career ecosystem",
+    "tech_ecosystem": "Tech/career ecosystem", "safe_accommodation": "Safe accommodation",
+    "lower_visa_risk": "Lower visa risk",
 }
+
+# Shared 1-5 band → label maps (index 0 unused).
+COST_LABELS = ["", "Low", "Affordable", "Average", "High", "Very high"]
+PART_TIME_LABELS = ["", "Limited", "Some", "Fair", "Good", "Plenty"]
+MARKET_LABELS = ["", "Small", "Modest", "Fair", "Strong", "Very strong"]
+ACCOMMODATION_LABELS = ["", "Easy", "Easy", "Moderate", "Hard", "Very hard"]
+COMMUNITY_LABELS = ["", "Small", "Some", "Good", "Strong", "Very strong"]
+STUDENT_LIFE_LABELS = ["", "Quiet", "Okay", "Good", "Great", "Buzzing"]
 
 
 def _b(band, invert=False):
@@ -157,10 +166,55 @@ def recommend_courses(profile, course_key):
     return out[:4]
 
 
-def recommend_universities(profile, course_key):
-    """Suggest UK universities from the best-fit cities for the course."""
+def _university_rec(u, city, profile, course_key):
+    """Build a detailed, honest university recommendation.
+
+    Curated *signals* (city cost, job market, community, etc.) come from our data.
+    Authoritative facts (exact fee, entry requirements, duration, intake) are NOT
+    invented — they read "Check official course page" with a source label + link.
+    """
+    info = UK_CITIES[city]
     course = COURSES.get(course_key) if course_key else None
-    cities = course["cities"] if course else ["London", "Manchester", "Birmingham"]
+    city_score = score_city(city, profile)["score"]
+    course_signal = course["job_signal"] if course else 3
+    match = max(0, min(100, round(0.6 * city_score + 0.4 * (course_signal / 5 * 100))))
+    level = profile.desired_study_level or "Masters"
+    subject = course_key or profile.subject_interest or "your subject"
+    official = f"https://www.google.com/search?q={u.replace(' ', '+')}+{subject.replace(' ', '+')}+{level.replace(' ', '+')}+course"
+
+    why = (f"Strong fit for {subject} in {city} — "
+           f"{'affordable' if info['cost'] <= 2 else 'average cost' if info['cost'] == 3 else 'higher cost'}, "
+           f"{COMMUNITY_LABELS[info['community']].lower()} community and "
+           f"{MARKET_LABELS[info['grad_market']].lower()} graduate job market.")
+
+    return {
+        "university": u,
+        "course": subject if subject != "your subject" else "Your subject",
+        "city": city, "country": "UK", "study_level": level,
+        "duration": "Check official course page",
+        "intake": profile.preferred_intake or "Check official course page",
+        "fee_range": "Check official course page",
+        "entry_summary": "Usually a relevant bachelor's degree — confirm exact grades on the official page.",
+        "english_requirement": "Usually IELTS/PTE required — check the official page for the exact score.",
+        "official_url": official,
+        "match_score": match,
+        "city_cost_level": COST_LABELS[info["cost"]],
+        "part_time_opportunity": PART_TIME_LABELS[info["part_time"]],
+        "career_market_signal": MARKET_LABELS[info["grad_market"]],
+        "accommodation_difficulty": ACCOMMODATION_LABELS[info["accommodation_difficulty"]],
+        "community_signal": COMMUNITY_LABELS[info["community"]],
+        "why_it_fits": why,
+        "what_to_check": "Confirm exact fees, entry requirements, English score, intake dates and course duration on the official course page.",
+        "source_name": "Official university course page",
+        "source_url": official,
+        "last_checked_at": None,
+    }
+
+
+def recommend_universities(profile, course_key):
+    """Suggest UK universities from the best-fit cities for the course (rich shape)."""
+    course = COURSES.get(course_key) if course_key else None
+    cities = (course["cities"] if course else []) + ["London", "Manchester", "Birmingham"]
     seen, unis = set(), []
     for city in cities:
         info = UK_CITIES.get(city)
@@ -170,15 +224,10 @@ def recommend_universities(profile, course_key):
             if u in seen:
                 continue
             seen.add(u)
-            unis.append({
-                "university": u, "course": course_key or profile.subject_interest or "Your subject",
-                "city": city, "fee_range": "Check official site (fees vary)",
-                "entry_summary": "Typical: relevant bachelor's + English test — confirm officially.",
-                "official_url": f"https://www.google.com/search?q={u.replace(' ', '+')}+{(course_key or '').replace(' ', '+')}+masters",
-                "why_it_fits": f"Offers strong options in {course_key or 'your area'} in an affordable, well-connected city." if info["cost"] <= 3 else f"Well-regarded for {course_key or 'your area'} (higher cost city).",
-            })
+            unis.append(_university_rec(u, city, profile, course_key))
         if len(unis) >= 6:
             break
+    unis.sort(key=lambda x: x["match_score"], reverse=True)
     return unis[:6]
 
 

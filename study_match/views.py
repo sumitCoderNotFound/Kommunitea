@@ -150,6 +150,8 @@ class AddToPlanView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        from datetime import datetime, time
+        from django.utils import timezone
         from scheduler.models import Task
         items = request.data.get("tasks") or []
         category = request.data.get("category", "university")
@@ -161,10 +163,18 @@ class AddToPlanView(APIView):
             title = (it.get("title") if isinstance(it, dict) else str(it)) or ""
             if not title.strip():
                 continue
+            due_at = None
+            raw_due = it.get("dueDate") or it.get("due_date") if isinstance(it, dict) else None
+            if raw_due:
+                try:
+                    due_at = timezone.make_aware(datetime.combine(datetime.strptime(raw_due[:10], "%Y-%m-%d").date(), time(9, 0)))
+                except (ValueError, TypeError):
+                    due_at = None
             Task.objects.create(
                 user=request.user, title=title.strip()[:200],
                 notes=(it.get("description", "") if isinstance(it, dict) else ""),
-                category=category, source=Task.Source.MANUAL, source_ref="studymatch",
+                category=category, due_at=due_at,
+                source=Task.Source.MANUAL, source_ref="studymatch",
             )
             created += 1
         return Response({"created": created}, status=status.HTTP_201_CREATED)

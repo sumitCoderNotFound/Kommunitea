@@ -42,6 +42,15 @@ class StudyMatchTests(APITestCase):
             self.assertLessEqual(c["score"], 100)
         self.assertTrue(r.data["course_recommendations"])
         self.assertTrue(r.data["city_recommendations"])
+        # Richer university shape with honest "check official" fields + source labels
+        unis = r.data["university_recommendations"]
+        self.assertTrue(unis)
+        u0 = unis[0]
+        for field in ("university", "city", "country", "study_level", "fee_range",
+                      "match_score", "city_cost_level", "career_market_signal",
+                      "community_signal", "why_it_fits", "what_to_check", "source_name"):
+            self.assertIn(field, u0)
+        self.assertEqual(u0["fee_range"], "Check official course page")
         self.assertIn("study", r.data["disclaimers"])
         self.assertEqual(StudyMatchResult.objects.filter(user=self.user).count(), 1)
 
@@ -83,6 +92,25 @@ class StudyMatchTests(APITestCase):
         self.assertEqual(r.data["created"], 2)
         self.assertEqual(Task.objects.filter(user=self.user, source_ref="studymatch").count(), 2)
         self.assertEqual(Task.objects.filter(user=self.user).count(), before + 2)
+
+    def test_add_to_plan_with_deadline(self):
+        from scheduler.models import Task
+        r = self.client.post("/api/study-match/add-to-plan/", {
+            "category": "university",
+            "tasks": [{"title": "Application deadline — Manchester", "dueDate": "2026-09-15"}],
+        }, format="json")
+        self.assertEqual(r.status_code, 201)
+        task = Task.objects.filter(user=self.user, source_ref="studymatch").latest("created_at")
+        self.assertIsNotNone(task.due_at)
+        self.assertEqual(task.due_at.date().isoformat(), "2026-09-15")
+
+    def test_saved_option_new_fields(self):
+        r = self.client.post("/api/study-match/saved/", {
+            "optionType": "university", "title": "University of Leeds", "city": "Leeds",
+            "matchScore": 82, "sourceName": "Official course page", "sourceUrl": "https://example.ac.uk",
+        }, format="json")
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(r.data["match_score"], 82)
 
     def test_ai_fallback_without_key(self):
         self.client.post("/api/study-match/profile/", self._profile_payload(), format="json")

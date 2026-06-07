@@ -90,6 +90,10 @@ class SavedStudyOption(models.Model):
     notes = models.TextField(blank=True)
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.RESEARCHING)
     deadline = models.DateField(null=True, blank=True)
+    match_score = models.PositiveIntegerField(null=True, blank=True)
+    source_name = models.CharField(max_length=160, blank=True)
+    source_url = models.URLField(blank=True)
+    last_checked_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
