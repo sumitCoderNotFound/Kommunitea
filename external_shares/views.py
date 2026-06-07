@@ -10,6 +10,7 @@ from scheduler.models import JobApplication, Task
 
 from .linkpreview import build_preview
 from .models import ExternalShare
+from accounts.throttles import SharePreviewThrottle
 from .serializers import ExternalShareSerializer
 
 
@@ -22,7 +23,8 @@ class ExternalShareViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return ExternalShare.objects.filter(user=self.request.user)
 
-    @action(detail=False, methods=["post"], url_path="preview")
+    @action(detail=False, methods=["post"], url_path="preview",
+            throttle_classes=[SharePreviewThrottle])
     def preview(self, request):
         url = (request.data.get("sourceUrl") or request.data.get("url") or "").strip()
         text = (request.data.get("sourceText") or request.data.get("text") or "").strip()

@@ -8,7 +8,12 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from drf_spectacular.views import (
     SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView,
 )
-from accounts.views import RegisterView, LoginView, MeView, ProfileViewSet, StreakView, SkillSuggestView, MyDataExportView, DeleteAccountView
+from accounts.views import MeView, ProfileViewSet, StreakView, SkillSuggestView, MyDataExportView, DeleteAccountView
+from accounts.auth_views import (
+    RegisterView, LoginView, VerifyEmailView, ResendVerificationView,
+    PasswordResetRequestView, PasswordResetConfirmView, GoogleLoginView,
+    LogoutView, LogoutAllView,
+)
 from posts.views import PostViewSet, StoryViewSet
 from messaging.views import ConversationViewSet
 from notifications.views import NotificationViewSet, RunRemindersView
@@ -53,6 +58,16 @@ urlpatterns = [
     path("api/auth/login/", LoginView.as_view(), name="login"),
     path("api/auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/me/", MeView.as_view(), name="me"),
+    # Email verification
+    path("api/auth/email/verify/", VerifyEmailView.as_view(), name="email-verify"),
+    path("api/auth/email/resend/", ResendVerificationView.as_view(), name="email-resend"),
+    # Password reset
+    path("api/auth/password-reset/request/", PasswordResetRequestView.as_view(), name="password-reset-request"),
+    path("api/auth/password-reset/confirm/", PasswordResetConfirmView.as_view(), name="password-reset-confirm"),
+    # Google + logout
+    path("api/auth/google/", GoogleLoginView.as_view(), name="google-login"),
+    path("api/auth/logout/", LogoutView.as_view(), name="logout"),
+    path("api/auth/logout-all/", LogoutAllView.as_view(), name="logout-all"),
     path("api/streak/", StreakView.as_view(), name="streak"),
     path("api/streak/touch/", StreakView.as_view(), name="streak-touch"),
     path("api/scheduler/opportunities/", OpportunityListView.as_view(), name="opportunities"),

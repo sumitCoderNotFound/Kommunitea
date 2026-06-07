@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config("SECRET_KEY", default="dev-insecure-change-me-in-production")
 DEBUG = config("DEBUG", default=True, cast=bool)
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="*,.railway.app,.up.railway.app", cast=Csv())
+ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,.railway.app,.up.railway.app", cast=Csv())
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "drf_spectacular",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     # local apps
     "accounts",
     "posts",
@@ -163,6 +164,15 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
+    "DEFAULT_THROTTLE_RATES": {
+        "login": "5/min",
+        "register": "5/hour",
+        "password_reset": "3/hour",
+        "resend_verification": "3/hour",
+        "google_login": "10/min",
+        "cv": "10/hour",
+        "share_preview": "20/min",
+    },
 }
 
 SPECTACULAR_SETTINGS = {
@@ -202,8 +212,11 @@ AUTH_USER_MODEL = "accounts.User"
 # JWT
 from datetime import timedelta  # noqa: E402
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
 }
 
 
@@ -219,3 +232,21 @@ if not DEBUG:
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = "DENY"
 CRON_SECRET = config("CRON_SECRET", default="")
+
+# --- Auth / email / Google ---
+# Email: console backend by default (dev) so signup never depends on SMTP being set up.
+EMAIL_BACKEND = config("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = config("EMAIL_HOST", default="")
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Kommunitea <no-reply@kommunitea.app>")
+FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173")
+
+# Email verification gate for sensitive actions. OFF until real email delivery
+# is configured, so shipping this never locks out existing users.
+REQUIRE_EMAIL_VERIFICATION = config("REQUIRE_EMAIL_VERIFICATION", default=False, cast=bool)
+
+# Google sign-in (POST /api/auth/google/). Empty = feature degrades gracefully.
+GOOGLE_CLIENT_ID = config("GOOGLE_CLIENT_ID", default="")

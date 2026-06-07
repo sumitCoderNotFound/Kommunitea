@@ -6,6 +6,7 @@ from drf_spectacular.utils import extend_schema
 from .models import Post, Comment, PostReshare
 from .serializers import PostSerializer, CommentSerializer
 from .permissions import can_view_post, visible_posts_filter, can_reshare_post, can_add_post_to_story
+from accounts.permissions import IsEmailVerified
 from notifications.models import Notification
 
 
@@ -31,7 +32,10 @@ class PostViewSet(viewsets.ModelViewSet):
         # Only editing/deleting the post itself requires being the author.
         if self.action in ["update", "partial_update", "destroy"]:
             return [permissions.IsAuthenticated(), IsAuthorOrReadOnly()]
-        # create, like, save, comment just require being logged in.
+        # Creating content requires a verified email (enforced only when
+        # REQUIRE_EMAIL_VERIFICATION is on — otherwise this is a no-op).
+        if self.action == "create":
+            return [permissions.IsAuthenticated(), IsEmailVerified()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):

@@ -53,6 +53,7 @@ class User(AbstractUser):
 
     username = None  # remove username; use email
     email = models.EmailField(unique=True)
+    is_email_verified = models.BooleanField(default=False)
 
     full_name = models.CharField(max_length=120)
     avatar = models.ImageField(upload_to="avatars/", blank=True, null=True)
@@ -233,3 +234,83 @@ class Highlight(models.Model):
 
     class Meta:
         ordering = ["order", "created_at"]
+
+
+# --- Authentication & security ---
+import secrets
+from datetime import timedelta
+from django.utils import timezone
+from django.conf import settings as dj_settings
+
+
+def _gen_token() -> str:
+    return secrets.token_urlsafe(48)
+
+
+class EmailVerificationToken(models.Model):
+    """Single-use, expiring token emailed to a user to verify their address."""
+    user = models.ForeignKey(dj_settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="email_tokens")
+    token = models.CharField(max_length=128, unique=True, default=_gen_token, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timedelta(hours=48)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_valid(self) -> bool:
+        return self.used_at is None and timezone.now() < self.expires_at
+
+
+class PasswordResetToken(models.Model):
+    """Single-use, expiring token for password reset."""
+    user = models.ForeignKey(dj_settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reset_tokens")
+    token = models.CharField(max_length=128, unique=True, default=_gen_token, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timedelta(hours=1)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_valid(self) -> bool:
+        return self.used_at is None and timezone.now() < self.expires_at
+
+
+class SecurityEvent(models.Model):
+    """Audit log for authentication-related events."""
+    class Type(models.TextChoices):
+        REGISTER = "register", "Register"
+        LOGIN_SUCCESS = "login_success", "Login success"
+        LOGIN_FAILED = "login_failed", "Login failed"
+        LOGOUT = "logout", "Logout"
+        LOGOUT_ALL = "logout_all", "Logout all devices"
+        PASSWORD_RESET_REQUESTED = "password_reset_requested", "Password reset requested"
+        PASSWORD_RESET_COMPLETED = "password_reset_completed", "Password reset completed"
+        EMAIL_VERIFIED = "email_verified", "Email verified"
+        EMAIL_VERIFICATION_SENT = "email_verification_sent", "Verification email sent"
+        GOOGLE_LOGIN_SUCCESS = "google_login_success", "Google login success"
+        GOOGLE_LOGIN_FAILED = "google_login_failed", "Google login failed"
+        RATE_LIMITED = "rate_limited", "Rate limited"
+
+    user = models.ForeignKey(dj_settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="security_events")
+    email = models.EmailField(blank=True)
+    event_type = models.CharField(max_length=40, choices=Type.choices)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=400, blank=True)
+    success = models.BooleanField(default=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["event_type", "created_at"]), models.Index(fields=["email"])]
+
+    def __str__(self):
+        return f"{self.event_type} {self.email} {'ok' if self.success else 'fail'}"

@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions, status
+from accounts.throttles import CVThrottle
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
@@ -33,7 +34,8 @@ class CVAnalysisViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return CVAnalysis.objects.filter(user=self.request.user)
 
-    @action(detail=False, methods=["post"], url_path="analyze")
+    @action(detail=False, methods=["post"], url_path="analyze",
+            throttle_classes=[CVThrottle])
     def analyze_cv(self, request):
         f = request.FILES.get("file")
         text = request.data.get("text", "")  # allow pasted text too

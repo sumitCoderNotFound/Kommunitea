@@ -7,12 +7,25 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 User = get_user_model()
 
 
+from django.contrib.auth.password_validation import validate_password as dj_validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+
+
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=6)
+    password = serializers.CharField(write_only=True, min_length=8, style={"input_type": "password"})
 
     class Meta:
         model = User
         fields = ["id", "full_name", "email", "password"]
+
+    def validate_password(self, value):
+        # Build a throwaway user so similarity-to-email/name checks work.
+        candidate = User(email=self.initial_data.get("email", ""), full_name=self.initial_data.get("full_name", ""))
+        try:
+            dj_validate_password(value, user=candidate)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(list(e.messages))
+        return value
 
     def create(self, validated_data):
         return User.objects.create_user(
