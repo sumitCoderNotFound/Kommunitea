@@ -19,6 +19,7 @@ from career.views import CVAnalysisViewSet, ReferralRequestViewSet, InterviewPre
 from accounts.career_views import FavouriteViewSet, HighlightViewSet
 from team.views import TeamMemberViewSet
 from scheduler.views import TaskViewSet, WeeklyGoalViewSet, OpportunityListView, SchedulerOverviewView, JobApplicationViewSet
+from external_shares.views import ExternalShareViewSet
 
 router = DefaultRouter()
 router.register(r"posts", PostViewSet, basename="post")
@@ -42,6 +43,7 @@ router.register(r"team", TeamMemberViewSet, basename="team")
 router.register(r"scheduler/tasks", TaskViewSet, basename="task")
 router.register(r"scheduler/goals", WeeklyGoalViewSet, basename="weeklygoal")
 router.register(r"scheduler/applications", JobApplicationViewSet, basename="jobapplication")
+router.register(r"external-shares", ExternalShareViewSet, basename="external-share")
 
 urlpatterns = [
     path("api/ai/", include("ai.urls")),

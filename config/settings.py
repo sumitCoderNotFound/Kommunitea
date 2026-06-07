@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "team",
     "scheduler",
     "career",
+    "external_shares",
 ]
 
 MIDDLEWARE = [
