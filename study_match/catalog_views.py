@@ -27,13 +27,19 @@ class UniversityListView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
+        from django.db.models import Q
         qs = University.objects.all()
         q = request.query_params
         if q.get("search"):
-            qs = qs.filter(university_name__icontains=q["search"])
-        for field in ("city", "region", "country"):
-            if q.get(field):
-                qs = qs.filter(**{f"{field}__iexact": q[field]})
+            s = q["search"].strip()
+            # Single-word / partial search across name, city and region.
+            qs = qs.filter(Q(university_name__icontains=s) | Q(city__icontains=s) | Q(region__icontains=s))
+        if q.get("city"):
+            qs = qs.filter(city__icontains=q["city"])
+        if q.get("region"):
+            qs = qs.filter(region__iexact=q["region"])
+        if q.get("country"):
+            qs = qs.filter(country__iexact=q["country"])
         if q.get("russellGroup") is not None and q.get("russellGroup") != "":
             qs = qs.filter(is_russell_group=_truthy(q.get("russellGroup")))
         if q.get("sponsorStatus"):

@@ -79,6 +79,42 @@ class CatalogTests(APITestCase):
         self.assertEqual(c.international_fee_gbp, 28000)
         self.assertFalse(c.fee_verified)  # imported data still needs manual verification
 
+    def test_import_sponsor_register_adds_on_top(self):
+        import study_match.sync as sync
+        before = University.objects.count()
+        csv_text = (
+            "Sponsor Name,Town/City,Sponsor Type,Status,Route\n"
+            "University of Manchester,Manchester,Higher Education Institution (HEI),Student Sponsor - Track Record,Student\n"
+            "Tiny Language School Ltd,London,Other,Student Sponsor,Student\n"
+        )
+        orig = sync._fetch
+        sync._fetch = lambda url: csv_text
+        try:
+            log = sync.import_sponsor_register(url="http://example.com/register.csv")
+        finally:
+            sync._fetch = orig
+        self.assertEqual(log.status, "success")
+        # Existing university updated (not duplicated), new sponsor added on top.
+        self.assertEqual(University.objects.filter(university_name="University of Manchester").count(), 1)
+        self.assertEqual(University.objects.count(), before + 1)  # only the language school is new
+        # Russell Group flags preserved; new arrivals are licensed with no invented fees.
+        self.assertEqual(University.objects.filter(is_russell_group=True).count(), 24)
+        school = University.objects.get(university_name="Tiny Language School Ltd")
+        self.assertEqual(school.ukvi_sponsor_status, SponsorStatus.LICENSED)
+        self.assertFalse(school.needs_verification)
+
+    def test_search_matches_name_city_region(self):
+        # Single-word search should hit name OR city OR region.
+        london = self.client.get("/api/study-match/catalog/universities/?search=london")
+        self.assertTrue(london.data["count"] >= 7)  # all London-city universities
+        man = self.client.get("/api/study-match/catalog/universities/?search=man")
+        self.assertTrue(man.data["count"] >= 2)  # Manchester (name + city)
+        scot = self.client.get("/api/study-match/catalog/universities/?search=scotland")
+        self.assertTrue(scot.data["count"] >= 3)  # region match
+        # Russell Group is NOT applied unless explicitly requested.
+        all_unis = self.client.get("/api/study-match/catalog/universities/")
+        self.assertEqual(all_unis.data["count"], 40)
+
     def test_sponsor_name_normalisation(self):
         # Distinguishing words must survive (the empty-key bug that matched only 1 uni).
         from study_match.sync import _norm

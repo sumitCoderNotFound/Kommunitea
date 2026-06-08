@@ -204,3 +204,87 @@ def import_courses_csv(text: str) -> SyncLog:
         log.status = "failed"; log.error_message = str(e)[:500]
     log.finished_at = timezone.now(); log.save()
     return log
+
+
+def import_sponsor_register(url: str | None = None) -> SyncLog:
+    """Create/UPDATE a University for EVERY row on the GOV.UK student sponsor register.
+
+    Max coverage: imports all sponsors (universities, colleges, language schools).
+    Adds on top of existing universities (match by normalised name → update; else create).
+    Russell Group flags on existing rows are preserved. Nothing is invented — fees/
+    courses stay null; town/city + sponsor status/rating come straight from the register.
+    """
+    log = SyncLog.objects.create(source_name="sponsor_register_import", status="running")
+    try:
+        if not url:
+            log.status = "skipped"; log.error_message = "No register URL provided."; log.finished_at = timezone.now(); log.save()
+            return log
+
+        raw = _fetch(url)
+        lines = raw.splitlines()
+        start = 0
+        for i, line in enumerate(lines[:15]):
+            low = line.lower()
+            if "sponsor name" in low or "organisation name" in low:
+                start = i
+                break
+        reader = csv.DictReader(io.StringIO("\n".join(lines[start:])))
+
+        def col(row, *names):
+            for n in names:
+                for k, v in row.items():
+                    if k and k.strip().lower() == n.lower():
+                        return (v or "").strip()
+            return ""
+
+        # Index existing universities by normalised name to avoid duplicates.
+        existing = {_norm(u.university_name): u for u in University.objects.all()}
+        now = timezone.now()
+        total = ins = upd = fail = 0
+
+        for row in reader:
+            total += 1
+            name = col(row, "Sponsor Name", "Organisation Name", "Organisation", "Name")
+            if not name:
+                fail += 1
+                continue
+            city = col(row, "Town/City", "Town", "City")
+            rating = col(row, "Status", "Type & Rating", "Sponsor Type", "Rating")
+            uni_type = col(row, "Sponsor Type", "Type")
+            key = _norm(name)
+
+            obj = existing.get(key)
+            if obj:
+                # Update sponsor fields on an existing university; keep RG flag + curated data.
+                obj.ukvi_sponsor_status = SponsorStatus.LICENSED
+                obj.sponsor_rating = (rating or "")[:40]
+                if not obj.city and city:
+                    obj.city = city[:120]
+                if not obj.university_type and uni_type:
+                    obj.university_type = uni_type[:80]
+                obj.needs_verification = False
+                obj.last_checked_at = now
+                obj.save()
+                upd += 1
+            else:
+                slug = slugify(name)[:120] or f"sponsor-{total}"
+                # Ensure unique slug.
+                base, n = slug, 1
+                while University.objects.filter(university_id=slug).exists():
+                    n += 1; slug = f"{base}-{n}"[:120]
+                created = University.objects.create(
+                    university_id=slug, university_name=name[:200], city=city[:120],
+                    country="United Kingdom", university_type=uni_type[:80],
+                    ukvi_sponsor_status=SponsorStatus.LICENSED, sponsor_rating=(rating or "")[:40],
+                    source_url=url, data_confidence=DataConfidence.MEDIUM, needs_verification=False,
+                    last_checked_at=now,
+                )
+                existing[key] = created  # so duplicate register rows update, not re-create
+                ins += 1
+
+        log.total_records, log.inserted_records, log.updated_records, log.failed_records = total, ins, upd, fail
+        log.status = "success"
+    except Exception as e:
+        log.status = "failed"; log.error_message = str(e)[:500]
+    log.finished_at = timezone.now(); log.save()
+    return log
