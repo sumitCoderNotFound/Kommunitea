@@ -18,9 +18,17 @@ from .models import University, Course, SyncLog, DataConfidence, SponsorStatus
 
 
 def _norm(name: str) -> str:
-    n = (name or "").lower()
-    n = re.sub(r"\b(the|university|of|college|london)\b", "", n)
-    return re.sub(r"[^a-z0-9]", "", n)
+    """Light normalisation that KEEPS distinguishing words (london, college, etc.).
+
+    Only strips a leading 'the', collapses '&'/'and', and removes punctuation —
+    so 'The University of Manchester' and 'University of Manchester' match, but
+    'University College London' does NOT collapse to an empty string.
+    """
+    n = (name or "").lower().strip()
+    n = n.replace("&", "and")
+    n = re.sub(r"^the\s+", "", n)
+    n = re.sub(r"[^a-z0-9]+", " ", n).strip()
+    return n
 
 
 def _fetch(url: str) -> str:
@@ -64,29 +72,76 @@ def sync_universities(url: str | None = None) -> SyncLog:
 
 
 def sync_ukvi_sponsors(url: str | None = None) -> SyncLog:
-    """Match GOV.UK student sponsor register rows to existing universities."""
+    """Match the GOV.UK student sponsor register to existing universities.
+
+    Handles the register's leading title rows, matches each UNIVERSITY against the
+    register (exact normalised name, then containment), and reports the number of
+    universities actually updated (not raw register rows).
+    """
     log = SyncLog.objects.create(source_name="ukvi_sponsors", status="running")
     try:
         if not url:
             log.status = "skipped"; log.error_message = "No register URL provided."; log.finished_at = timezone.now(); log.save()
             return log
-        rows = list(csv.DictReader(io.StringIO(_fetch(url))))
-        index = {_norm(u.university_name): u for u in University.objects.all()}
+
+        raw = _fetch(url)
+        lines = raw.splitlines()
+        # GOV.UK puts a few title rows before the real header — find the header line.
+        start = 0
+        for i, line in enumerate(lines[:15]):
+            low = line.lower()
+            if "sponsor name" in low or "organisation name" in low or ("organisation" in low and "rating" in low):
+                start = i
+                break
+        reader = csv.DictReader(io.StringIO("\n".join(lines[start:])))
+
+        def col(row, *names):
+            for n in names:
+                for k, v in row.items():
+                    if k and k.strip().lower() == n.lower():
+                        return (v or "").strip()
+            return ""
+
+        # Build a register index: normalised org name -> rating/status.
+        register = {}
+        total = 0
+        for row in reader:
+            total += 1
+            org = col(row, "Sponsor Name", "Organisation Name", "Organisation", "Name")
+            if not org:
+                continue
+            register[_norm(org)] = col(row, "Status", "Type & Rating", "Type and Rating", "Sponsor Type", "Rating")
+
+        STOP = {"the", "of", "at", "and", "in", "for"}
+        def tokens(s):
+            return {t for t in s.split() if t not in STOP}
+        reg_tokens = {k: tokens(k) for k in register}
+        reg_keys = list(register.keys())
+
         matched = 0
-        for r in rows:
-            org = (r.get("Organisation Name") or r.get("organisation_name") or r.get("Name") or "").strip()
-            rating = (r.get("Type & Rating") or r.get("type_rating") or r.get("Rating") or "").strip()
-            uni = index.get(_norm(org))
-            if uni:
+        for uni in University.objects.all():
+            key = _norm(uni.university_name)
+            rating = register.get(key)
+            if rating is None:
+                # 1) containment, then 2) token-set subset (handles reordered legal names
+                #    e.g. "Durham University" vs "University of Durham").
+                hit = next((rk for rk in reg_keys if key and len(key) > 8 and (key in rk or rk in key)), None)
+                if not hit:
+                    ut = tokens(key)
+                    hit = next((rk for rk in reg_keys if len(ut) >= 2 and (ut <= reg_tokens[rk] or reg_tokens[rk] <= ut)), None)
+                rating = register.get(hit) if hit else None
+            if rating is not None:
                 uni.ukvi_sponsor_status = SponsorStatus.LICENSED
-                uni.sponsor_rating = rating[:40]
+                uni.sponsor_rating = (rating or "")[:40]
                 uni.needs_verification = False
                 if uni.data_confidence == DataConfidence.LOW:
                     uni.data_confidence = DataConfidence.MEDIUM
                 uni.last_checked_at = timezone.now()
                 uni.save(update_fields=["ukvi_sponsor_status", "sponsor_rating", "needs_verification", "data_confidence", "last_checked_at"])
                 matched += 1
-        log.total_records, log.updated_records = len(rows), matched
+
+        log.total_records = total
+        log.updated_records = matched  # universities updated, not register rows
         log.status = "success"
     except Exception as e:
         log.status = "failed"; log.error_message = str(e)[:500]

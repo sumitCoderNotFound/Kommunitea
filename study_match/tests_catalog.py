@@ -79,6 +79,13 @@ class CatalogTests(APITestCase):
         self.assertEqual(c.international_fee_gbp, 28000)
         self.assertFalse(c.fee_verified)  # imported data still needs manual verification
 
+    def test_sponsor_name_normalisation(self):
+        # Distinguishing words must survive (the empty-key bug that matched only 1 uni).
+        from study_match.sync import _norm
+        self.assertEqual(_norm("The University of Manchester"), "university of manchester")
+        self.assertNotEqual(_norm("University College London"), "")
+        self.assertNotEqual(_norm("University College London"), _norm("London School of Economics"))
+
     def test_admin_verification_queue_requires_staff(self):
         self.client.force_authenticate(self.user)
         self.assertEqual(self.client.get("/api/study-match/admin/verification-queue/").status_code, 403)
