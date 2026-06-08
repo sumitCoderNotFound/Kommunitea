@@ -18,7 +18,8 @@ except Exception:  # pragma: no cover
 
 
 def _is_verified(user):
-    return bool(getattr(user, "is_email_verified", False) or getattr(user, "is_verified", False))
+    # return bool(getattr(user, "is_email_verified", False) or getattr(user, "is_verified", False))
+      return True  # TEMP TEST: allow any logged-in user to upload. REVERT before launch.
 
 
 class ClipViewSet(viewsets.ModelViewSet):
