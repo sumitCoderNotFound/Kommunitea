@@ -79,6 +79,26 @@ class CatalogTests(APITestCase):
         self.assertEqual(c.international_fee_gbp, 28000)
         self.assertFalse(c.fee_verified)  # imported data still needs manual verification
 
+    def test_indicative_fee_bands(self):
+        from study_match.fee_bands import classify
+        self.assertEqual(classify("Masters", "Computer Science"), "pg_lab")
+        self.assertEqual(classify("MBA", "Business"), "pg_business")
+        self.assertEqual(classify("Bachelors", "Medicine"), "ug_clinical")
+        self.assertEqual(classify("PhD", "Physics"), "phd")
+        self.assertEqual(classify("Masters", "History"), "pg_classroom")
+        self.assertEqual(classify("Bachelors", "Business"), "ug_classroom")  # UG business = classroom
+        # Reference endpoint returns all 8 bands with source + disclaimer.
+        r = self.client.get("/api/study-match/catalog/fee-bands/")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(r.data["bands"]), 8)
+        self.assertIn("disclaimer", r.data)
+        # Course serializer attaches an indicative band.
+        uni = University.objects.get(university_id="university-of-leeds")
+        Course.objects.create(course_id="leeds-msc-cs2", university=uni, university_name=uni.university_name,
+                              course_name="MSc Computer Science", subject_area="Computer Science", degree_level="Masters")
+        detail = self.client.get("/api/study-match/catalog/courses/leeds-msc-cs2/")
+        self.assertEqual(detail.data["indicative_fee_band"]["key"], "pg_lab")
+
     def test_import_sponsor_register_adds_on_top(self):
         import study_match.sync as sync
         before = University.objects.count()

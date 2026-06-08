@@ -55,7 +55,8 @@ class UniversityDetailView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, pk):
-        uni = University.objects.filter(pk=pk).first() or University.objects.filter(university_id=pk).first()
+        uni = (University.objects.filter(pk=pk).first() if str(pk).isdigit() else None) \
+            or University.objects.filter(university_id=pk).first()
         if not uni:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         data = UniversityDetailSerializer(uni).data
@@ -109,12 +110,25 @@ class CourseDetailView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, pk):
-        c = Course.objects.filter(pk=pk).first() or Course.objects.filter(course_id=pk).first()
+        c = (Course.objects.filter(pk=pk).first() if str(pk).isdigit() else None) \
+            or Course.objects.filter(course_id=pk).first()
         if not c:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         data = CourseSerializer(c).data
         data["disclaimer"] = DISCLAIMERS["university"]
         return Response(data)
+
+
+class FeeBandsView(APIView):
+    """Reference list of indicative international fee bands (guidance, not exact)."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .fee_bands import all_bands, SOURCE, SOURCE_URL
+        return Response({
+            "bands": all_bands(), "source": SOURCE, "sourceUrl": SOURCE_URL,
+            "disclaimer": "Indicative international fee ranges for guidance only. Confirm the exact fee on the official course page.",
+        })
 
 
 class RecommendationsView(APIView):
