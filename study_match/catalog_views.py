@@ -278,3 +278,32 @@ class ImportCoursesCsvView(_AdminView):
             return Response({"detail": "Upload a CSV in the 'file' field."}, status=status.HTTP_400_BAD_REQUEST)
         log = import_courses_csv(f.read().decode("utf-8", errors="replace"))
         return Response(SyncLogSerializer(log).data, status=status.HTTP_201_CREATED)
+
+
+class JobInsightsView(APIView):
+    """Latest external jobs (Adzuna) for the frontend — filter by city/category."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .models import ExternalJob, StudyDataImportRun
+        qs = ExternalJob.objects.filter(is_active=True)
+        q = request.query_params
+        if q.get("city"):
+            qs = qs.filter(city__iexact=q["city"])
+        if q.get("category"):
+            qs = qs.filter(category__icontains=q["category"])
+        if q.get("search"):
+            qs = qs.filter(title__icontains=q["search"])
+        jobs = [{
+            "id": j.id, "title": j.title, "company": j.company, "city": j.city,
+            "salaryMin": j.salary_min, "salaryMax": j.salary_max, "jobType": j.job_type,
+            "category": j.category, "source": j.source, "applyUrl": j.apply_url,
+            "lastCheckedAt": j.last_checked_at,
+        } for j in qs[:40]]
+        last_run = StudyDataImportRun.objects.filter(source_name="adzuna_jobs", status="success").first()
+        return Response({
+            "jobs": jobs, "count": len(jobs),
+            "lastUpdated": last_run.finished_at if last_run else None,
+            "attribution": "Jobs powered by Adzuna",
+            "disclaimer": "Job market signal is indicative and does not guarantee employment. Salaries are indicative ranges — confirm with the employer.",
+        })

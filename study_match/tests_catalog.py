@@ -79,6 +79,26 @@ class CatalogTests(APITestCase):
         self.assertEqual(c.international_fee_gbp, 28000)
         self.assertFalse(c.fee_verified)  # imported data still needs manual verification
 
+    def test_adzuna_skips_without_keys_and_job_insights(self):
+        from study_match.adzuna import import_adzuna_jobs, _signal
+        from study_match.models import ExternalJob
+        # Signal thresholds (indicative bands).
+        self.assertEqual(_signal(50), "Limited")
+        self.assertEqual(_signal(300), "Moderate")
+        self.assertEqual(_signal(1000), "Strong")
+        self.assertEqual(_signal(5000), "Very strong")
+        # No keys configured in tests → skipped, never crashes, keeps existing data.
+        run = import_adzuna_jobs()
+        self.assertEqual(run.status, "skipped")
+        # Job insights endpoint returns active jobs + attribution + disclaimer.
+        ExternalJob.objects.create(title="Data Analyst", company="Acme", city="Manchester",
+                                   source="adzuna", apply_url="https://example.com/job/1", is_active=True)
+        r = self.client.get("/api/study-match/job-insights/?city=Manchester")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(r.data["jobs"]), 1)
+        self.assertIn("Adzuna", r.data["attribution"])
+        self.assertIn("disclaimer", r.data)
+
     def test_city_study_data_pipeline(self):
         from django.core.management import call_command
         from study_match.models import CityStudyData, StudyDataImportRun

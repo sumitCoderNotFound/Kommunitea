@@ -9,7 +9,7 @@ from .views import (
 from .catalog_views import (
     UniversityListView, UniversityDetailView, CourseListView, CourseDetailView,
     RecommendationsView, VerificationQueueView, UniversityUpdateView, CourseUpdateView,
-    SyncUniversitiesView, SyncUkviSponsorsView, ImportCoursesCsvView, FeeBandsView, CountryInsightsView, CityInsightsView,
+    SyncUniversitiesView, SyncUkviSponsorsView, ImportCoursesCsvView, FeeBandsView, CountryInsightsView, CityInsightsView, JobInsightsView,
 )
 
 router = DefaultRouter()
@@ -38,6 +38,8 @@ urlpatterns = [
     path("insights/", CountryInsightsView.as_view(), name="catalog-insights"),
     path("catalog/city-insights/", CityInsightsView.as_view(), name="catalog-city-insights"),
     path("city-insights/", CityInsightsView.as_view(), name="city-insights"),
+    path("job-insights/", JobInsightsView.as_view(), name="job-insights"),
+    path("catalog/job-insights/", JobInsightsView.as_view(), name="catalog-job-insights"),
     # --- Admin verification + sync ---
     path("admin/verification-queue/", VerificationQueueView.as_view(), name="catalog-verification-queue"),
     path("admin/universities/<int:pk>/", UniversityUpdateView.as_view(), name="catalog-university-update"),
