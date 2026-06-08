@@ -131,6 +131,22 @@ class FeeBandsView(APIView):
         })
 
 
+class CountryInsightsView(APIView):
+    """Country intelligence — derived indicative scores + last-updated + source."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .catalog_serializers import CountryInsightSerializer
+        from .models import CountryStudyInsight, StudyDataImportRun
+        qs = CountryStudyInsight.objects.all()
+        last_run = StudyDataImportRun.objects.filter(source_name="country_insights", status="success").first()
+        return Response({
+            "countries": CountryInsightSerializer(qs, many=True).data,
+            "lastUpdated": last_run.finished_at if last_run else None,
+            "disclaimer": DISCLAIMERS.get("study", "Indicative guidance — confirm details on official sources."),
+        })
+
+
 class RecommendationsView(APIView):
     """POST: score real catalog courses against the student's inputs."""
     permission_classes = [permissions.IsAuthenticated]

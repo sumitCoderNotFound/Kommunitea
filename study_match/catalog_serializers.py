@@ -1,6 +1,12 @@
 from rest_framework import serializers
 
-from .models import University, Course, SyncLog
+from .models import University, Course, SyncLog, CountryStudyInsight
+
+
+class CountryInsightSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CountryStudyInsight
+        fields = "__all__"
 
 
 class CourseSerializer(serializers.ModelSerializer):

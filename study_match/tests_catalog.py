@@ -79,6 +79,24 @@ class CatalogTests(APITestCase):
         self.assertEqual(c.international_fee_gbp, 28000)
         self.assertFalse(c.fee_verified)  # imported data still needs manual verification
 
+    def test_country_insights_refresh_and_endpoint(self):
+        from django.core.management import call_command
+        from study_match.models import CountryStudyInsight, StudyDataImportRun
+        call_command("refresh_country_insights")
+        self.assertEqual(CountryStudyInsight.objects.count(), 7)
+        uk = CountryStudyInsight.objects.get(country="UK")
+        self.assertTrue(0 <= uk.overall_score <= 100)
+        self.assertTrue(uk.popular_cities)
+        self.assertTrue(uk.source_url)  # official link present
+        self.assertTrue(uk.last_checked_at)
+        # Import run logged as success.
+        self.assertTrue(StudyDataImportRun.objects.filter(source_name="country_insights", status="success").exists())
+        # Endpoint returns countries + lastUpdated + disclaimer.
+        r = self.client.get("/api/study-match/catalog/countries/")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(r.data["countries"]), 7)
+        self.assertIn("lastUpdated", r.data)
+
     def test_indicative_fee_bands(self):
         from study_match.fee_bands import classify
         self.assertEqual(classify("Masters", "Computer Science"), "pg_lab")

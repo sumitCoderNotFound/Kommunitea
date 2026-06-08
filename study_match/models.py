@@ -248,3 +248,60 @@ class SyncLog(models.Model):
 
     class Meta:
         ordering = ["-started_at"]
+
+
+# ============================================================================
+# Country intelligence + shared import-run log (auto-refresh system).
+# Scores are DERIVED/curated indicative signals, not official statistics.
+# ============================================================================
+
+class StudyDataImportRun(models.Model):
+    """Shared log for every Study Match import/refresh job."""
+    source_name = models.CharField(max_length=120)
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, default="running")  # running/success/failed/skipped
+    records_created = models.PositiveIntegerField(default=0)
+    records_updated = models.PositiveIntegerField(default=0)
+    records_failed = models.PositiveIntegerField(default=0)
+    error_message = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+
+    def __str__(self):
+        return f"{self.source_name} · {self.status} · {self.started_at:%Y-%m-%d %H:%M}"
+
+
+class CountryStudyInsight(models.Model):
+    country = models.CharField(max_length=40, unique=True)   # code/key e.g. "UK"
+    name = models.CharField(max_length=80)
+    study_score = models.PositiveIntegerField(default=0)
+    work_score = models.PositiveIntegerField(default=0)
+    budget_score = models.PositiveIntegerField(default=0)
+    visa_score = models.PositiveIntegerField(default=0)
+    language_score = models.PositiveIntegerField(default=0)
+    ranking_score = models.PositiveIntegerField(default=0)
+    student_life_score = models.PositiveIntegerField(default=0)
+    overall_score = models.PositiveIntegerField(default=0)
+    best_for_subjects = models.JSONField(default=list, blank=True)
+    popular_cities = models.JSONField(default=list, blank=True)
+    tuition_band = models.CharField(max_length=20, blank=True)
+    living_cost_band = models.CharField(max_length=20, blank=True)
+    post_study_work_summary = models.CharField(max_length=200, blank=True)
+    part_time_work_summary = models.CharField(max_length=200, blank=True)
+    language_notes = models.CharField(max_length=200, blank=True)
+    risk_notes = models.TextField(blank=True)
+    weekly_update_summary = models.TextField(blank=True)
+    source_name = models.CharField(max_length=120, blank=True)
+    source_url = models.URLField(blank=True)
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+    update_frequency = models.CharField(max_length=20, default="monthly")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-overall_score"]
+
+    def __str__(self):
+        return self.name
