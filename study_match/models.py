@@ -129,3 +129,122 @@ class StudySource(models.Model):
 
     def __str__(self):
         return self.source_name
+
+
+# ============================================================================
+# UK university & course CATALOG (free-public-data discovery + matching).
+# Every record carries source_url, last_checked_at, data_confidence and
+# needs_verification. Unknown facts are stored as NULL — never invented.
+# ============================================================================
+
+class DataConfidence(models.TextChoices):
+    HIGH = "high", "High"
+    MEDIUM = "medium", "Medium"
+    LOW = "low", "Low"
+
+
+class SponsorStatus(models.TextChoices):
+    LICENSED = "licensed", "Licensed sponsor"
+    NOT_LISTED = "not_listed", "Not on register"
+    UNKNOWN = "unknown", "Unknown / not checked"
+
+
+class University(models.Model):
+    university_id = models.SlugField(max_length=120, unique=True)
+    university_name = models.CharField(max_length=200, db_index=True)
+    city = models.CharField(max_length=120, blank=True, db_index=True)
+    region = models.CharField(max_length=120, blank=True, db_index=True)
+    country = models.CharField(max_length=80, default="United Kingdom")
+    website_url = models.URLField(blank=True)
+    ukprn = models.CharField(max_length=20, blank=True, db_index=True)
+    postcode = models.CharField(max_length=16, blank=True)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    university_type = models.CharField(max_length=80, blank=True)
+    is_russell_group = models.BooleanField(default=False)
+    ukvi_sponsor_status = models.CharField(max_length=16, choices=SponsorStatus.choices, default=SponsorStatus.UNKNOWN)
+    sponsor_rating = models.CharField(max_length=40, blank=True)
+    international_office_url = models.URLField(blank=True)
+    accommodation_url = models.URLField(blank=True)
+    scholarship_url = models.URLField(blank=True)
+    source_url = models.URLField(blank=True)
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+    data_confidence = models.CharField(max_length=8, choices=DataConfidence.choices, default=DataConfidence.LOW)
+    needs_verification = models.BooleanField(default=True)
+    raw_data = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["university_name"]
+
+    def __str__(self):
+        return self.university_name
+
+
+class Course(models.Model):
+    course_id = models.SlugField(max_length=160, unique=True)
+    university = models.ForeignKey(University, on_delete=models.CASCADE, related_name="courses")
+    university_name = models.CharField(max_length=200, blank=True)  # denormalised for fast lists
+    course_name = models.CharField(max_length=240, db_index=True)
+    degree_level = models.CharField(max_length=60, blank=True, db_index=True)
+    subject_area = models.CharField(max_length=120, blank=True, db_index=True)
+    duration = models.CharField(max_length=60, blank=True)
+    study_mode = models.CharField(max_length=60, blank=True)
+    intake_months = models.JSONField(default=list, blank=True)
+    international_fee_gbp = models.PositiveIntegerField(null=True, blank=True)
+    international_fee_text = models.CharField(max_length=120, blank=True)
+    home_fee_gbp = models.PositiveIntegerField(null=True, blank=True)
+    application_fee_gbp = models.PositiveIntegerField(null=True, blank=True)
+    entry_requirements = models.TextField(blank=True)
+    english_language_requirement = models.CharField(max_length=200, blank=True)
+    ielts_overall = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    ielts_per_component = models.CharField(max_length=120, blank=True)
+    pte_requirement = models.CharField(max_length=80, blank=True)
+    work_placement_available = models.BooleanField(null=True, blank=True)
+    scholarship_info = models.TextField(blank=True)
+    campus_location = models.CharField(max_length=160, blank=True)
+    course_url = models.URLField(blank=True)
+    application_url = models.URLField(blank=True)
+    source_url = models.URLField(blank=True)
+    fee_verified = models.BooleanField(default=False)
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+    data_confidence = models.CharField(max_length=8, choices=DataConfidence.choices, default=DataConfidence.LOW)
+    needs_verification = models.BooleanField(default=True)
+    raw_data = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["course_name"]
+
+    def __str__(self):
+        return f"{self.course_name} — {self.university_name}"
+
+
+class DataSource(models.Model):
+    source_name = models.CharField(max_length=120, unique=True)
+    source_type = models.CharField(max_length=60, blank=True)
+    source_url = models.URLField(blank=True)
+    update_frequency = models.CharField(max_length=60, blank=True)
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=40, default="idle")
+    notes = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.source_name
+
+
+class SyncLog(models.Model):
+    source_name = models.CharField(max_length=120)
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    total_records = models.PositiveIntegerField(default=0)
+    inserted_records = models.PositiveIntegerField(default=0)
+    updated_records = models.PositiveIntegerField(default=0)
+    failed_records = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=40, default="running")
+    error_message = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-started_at"]
