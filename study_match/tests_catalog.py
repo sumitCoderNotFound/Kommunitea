@@ -79,6 +79,27 @@ class CatalogTests(APITestCase):
         self.assertEqual(c.international_fee_gbp, 28000)
         self.assertFalse(c.fee_verified)  # imported data still needs manual verification
 
+    def test_city_study_data_pipeline(self):
+        from django.core.management import call_command
+        from study_match.models import CityStudyData, StudyDataImportRun
+        call_command("seed_city_study_data")
+        self.assertEqual(CityStudyData.objects.count(), 25)
+        man = CityStudyData.objects.get(slug="manchester")
+        self.assertTrue(0 <= man.overall_city_score <= 100)
+        self.assertIn("University of Manchester", man.top_universities)  # derived from real catalog
+        self.assertTrue(man.monthly_living_cost_band)  # band, not exact
+        self.assertEqual(man.data_confidence, "low")   # curated/indicative
+        self.assertTrue(StudyDataImportRun.objects.filter(source_name="city_study_data", status="success").exists())
+        # Endpoint returns clean per-city objects + score breakdown + disclaimer.
+        r = self.client.get("/api/study-match/catalog/city-insights/")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(r.data["cities"]), 25)
+        self.assertIn("scoreBreakdown", r.data["cities"][0])
+        self.assertIn("disclaimer", r.data)
+        # Search matches city or region.
+        self.assertTrue(self.client.get("/api/study-match/catalog/city-insights/?search=manchester").data["cities"])
+        self.assertTrue(self.client.get("/api/study-match/catalog/city-insights/?search=scotland").data["cities"])
+
     def test_country_insights_refresh_and_endpoint(self):
         from django.core.management import call_command
         from study_match.models import CountryStudyInsight, StudyDataImportRun

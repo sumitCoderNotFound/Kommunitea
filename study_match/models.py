@@ -305,3 +305,97 @@ class CountryStudyInsight(models.Model):
 
     def __str__(self):
         return self.name
+
+
+# ============================================================================
+# City data pipeline: raw source tables → clean CityStudyData master → API.
+# Signals are indicative bands (curated/derived), never invented exact numbers.
+# ============================================================================
+
+class _RawImport(models.Model):
+    """Base for source-specific raw import tables (keeps source history)."""
+    source_url = models.URLField(blank=True)
+    raw_payload = models.JSONField(default=dict, blank=True)
+    imported_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        abstract = True
+        ordering = ["-imported_at"]
+
+
+class RawGovStudentSponsorData(_RawImport): pass
+class RawONSRentData(_RawImport): pass
+class RawNomisLabourData(_RawImport): pass
+class RawAdzunaJobsData(_RawImport): pass
+class RawPoliceSafetyData(_RawImport): pass
+class RawHesaProviderData(_RawImport): pass
+
+
+class CityStudyData(models.Model):
+    city = models.CharField(max_length=120, db_index=True)
+    slug = models.SlugField(max_length=140, unique=True)
+    region = models.CharField(max_length=120, blank=True, db_index=True)
+    country = models.CharField(max_length=80, default="United Kingdom")
+    cost_level = models.CharField(max_length=20, blank=True)            # Low/Medium/Medium-high/High/Very high
+    rent_level = models.CharField(max_length=20, blank=True)
+    monthly_living_cost_band = models.CharField(max_length=40, blank=True)  # indicative band text
+    average_rent_band = models.CharField(max_length=40, blank=True)
+    salary_signal = models.CharField(max_length=20, blank=True)
+    employment_signal = models.CharField(max_length=20, blank=True)
+    part_time_job_signal = models.CharField(max_length=20, blank=True)  # Limited/Moderate/Strong/Very strong
+    graduate_job_market_signal = models.CharField(max_length=20, blank=True)
+    safety_signal = models.CharField(max_length=20, blank=True)         # Low risk/Moderate/Higher caution
+    student_life_signal = models.CharField(max_length=20, blank=True)
+    international_community_signal = models.CharField(max_length=20, blank=True)
+    accommodation_difficulty = models.CharField(max_length=20, blank=True)  # Easy/Moderate/Hard
+    transport_signal = models.CharField(max_length=20, blank=True)
+    main_industries = models.JSONField(default=list, blank=True)
+    best_for_subjects = models.JSONField(default=list, blank=True)
+    best_for_career_areas = models.JSONField(default=list, blank=True)
+    top_universities = models.JSONField(default=list, blank=True)       # derived from catalog
+    related_communities = models.JSONField(default=list, blank=True)
+    city_summary = models.TextField(blank=True)
+    why_choose_this_city = models.TextField(blank=True)
+    what_to_be_careful_about = models.TextField(blank=True)
+    # internal numeric signals (0-5) used to derive the match score; not shown raw
+    cost_value = models.PositiveIntegerField(default=3)
+    rent_value = models.PositiveIntegerField(default=3)
+    part_time_value = models.PositiveIntegerField(default=3)
+    grad_value = models.PositiveIntegerField(default=3)
+    student_life_value = models.PositiveIntegerField(default=3)
+    community_value = models.PositiveIntegerField(default=3)
+    accommodation_value = models.PositiveIntegerField(default=3)
+    overall_city_score = models.PositiveIntegerField(default=0)
+    source_name = models.CharField(max_length=160, blank=True)
+    source_url = models.URLField(blank=True)
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+    data_confidence = models.CharField(max_length=12, choices=DataConfidence.choices, default=DataConfidence.LOW)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-overall_city_score", "city"]
+
+    def __str__(self):
+        return self.city
+
+
+class ExternalJob(models.Model):
+    title = models.CharField(max_length=240)
+    company = models.CharField(max_length=200, blank=True)
+    city = models.CharField(max_length=120, blank=True, db_index=True)
+    country = models.CharField(max_length=80, default="United Kingdom")
+    salary_min = models.PositiveIntegerField(null=True, blank=True)
+    salary_max = models.PositiveIntegerField(null=True, blank=True)
+    job_type = models.CharField(max_length=60, blank=True)
+    category = models.CharField(max_length=80, blank=True)
+    source = models.CharField(max_length=60, blank=True)
+    apply_url = models.URLField(blank=True)
+    is_active = models.BooleanField(default=True)
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-last_checked_at"]
+
+    def __str__(self):
+        return f"{self.title} — {self.company}"

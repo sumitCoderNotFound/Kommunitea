@@ -147,6 +147,40 @@ class CountryInsightsView(APIView):
         })
 
 
+class CityInsightsView(APIView):
+    """City Guide — one clean indicative object per city (curated/derived signals)."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .catalog_serializers import CityInsightSerializer
+        from .models import CityStudyData, StudyDataImportRun
+        from .city_data import city_match_score
+        qs = CityStudyData.objects.all()
+        q = request.query_params
+        if q.get("search"):
+            from django.db.models import Q
+            s = q["search"]
+            qs = qs.filter(Q(city__icontains=s) | Q(region__icontains=s))
+        if q.get("region"):
+            qs = qs.filter(region__iexact=q["region"])
+        if q.get("costLevel"):
+            qs = qs.filter(cost_level__iexact=q["costLevel"])
+        data = []
+        for c in qs:
+            row = CityInsightSerializer(c).data
+            _, breakdown = city_match_score(c.cost_value, c.rent_value, c.part_time_value, c.grad_value,
+                                            c.student_life_value, c.community_value, c.accommodation_value)
+            row["scoreBreakdown"] = breakdown
+            data.append(row)
+        last_run = StudyDataImportRun.objects.filter(source_name="city_study_data", status="success").first()
+        return Response({
+            "cities": data,
+            "lastUpdated": last_run.finished_at if last_run else None,
+            "disclaimer": "Indicative city signals (cost, jobs, accommodation, community) — may change. "
+                          "Always verify current rent, job availability and official university information before deciding.",
+        })
+
+
 class RecommendationsView(APIView):
     """POST: score real catalog courses against the student's inputs."""
     permission_classes = [permissions.IsAuthenticated]
