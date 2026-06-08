@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "career",
     "external_shares",
     "study_match",
+    "clips",
 ]
 
 MIDDLEWARE = [
@@ -269,3 +270,7 @@ ADZUNA_APP_ID = config("ADZUNA_APP_ID", default="")
 ADZUNA_APP_KEY = config("ADZUNA_APP_KEY", default="")
 SPONSOR_REGISTER_URL = config("SPONSOR_REGISTER_URL", default="")
 ANTHROPIC_API_KEY = config("ANTHROPIC_API_KEY", default="")
+
+# Allow larger multipart uploads for Clips video (validated to <=100MB in the API).
+DATA_UPLOAD_MAX_MEMORY_SIZE = 105 * 1024 * 1024  # 105MB headroom
+FILE_UPLOAD_MAX_MEMORY_SIZE = 105 * 1024 * 1024

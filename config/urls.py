@@ -30,6 +30,7 @@ from accounts.career_views import FavouriteViewSet, HighlightViewSet
 from team.views import TeamMemberViewSet
 from scheduler.views import TaskViewSet, WeeklyGoalViewSet, OpportunityListView, SchedulerOverviewView, JobApplicationViewSet
 from external_shares.views import ExternalShareViewSet
+from clips.views import ClipViewSet, UserClipsView
 
 router = DefaultRouter()
 router.register(r"posts", PostViewSet, basename="post")
@@ -54,8 +55,11 @@ router.register(r"scheduler/tasks", TaskViewSet, basename="task")
 router.register(r"scheduler/goals", WeeklyGoalViewSet, basename="weeklygoal")
 router.register(r"scheduler/applications", JobApplicationViewSet, basename="jobapplication")
 router.register(r"external-shares", ExternalShareViewSet, basename="external-share")
+router.register(r"clips", ClipViewSet, basename="clip")
 
 urlpatterns = [
+    path("api/users/<int:user_id>/clips/", UserClipsView.as_view({"get": "by_user"}), name="user-clips"),
+    path("api/communities/<int:community_id>/clips/", UserClipsView.as_view({"get": "by_community"}), name="community-clips"),
     path("api/ai/", include("ai.urls")),
     path("api/study-match/", include("study_match.urls")),
     path("admin/", admin.site.urls),
